@@ -1,0 +1,22 @@
+packages:
+  "framer-motion": "Animations, page transitions, and smooth interactive elements"
+  "recharts": "Dashboard analytics charts and data visualization"
+  "date-fns": "Human-readable date formatting for tables and logs"
+  "clsx": "Class name merging"
+  "tailwind-merge": "Tailwind utility class merging"
+  "lucide-react": "Beautiful consistent icons"
+  "react-hook-form": "Robust form state management"
+  "@hookform/resolvers": "Zod integration for forms"
+  "zod": "Schema validation for forms and API"
+
+images:
+  - path: "artifacts/email-platform/public/images/hero-bg.png"
+    description: "Abstract minimal geometric background in deep navy and bright teal with soft light leaks and subtle mesh gradients, highly professional, clean SaaS aesthetic, 8k resolution"
+    aspect_ratio: "16:9"
+  - path: "artifacts/email-platform/public/images/dashboard-mockup.png"
+    description: "Abstract glassmorphism UI elements floating on a dark background, representing an email marketing analytics dashboard with charts and data nodes"
+    aspect_ratio: "16:9"
+
+notes:
+  - We use standard fetch wrappers in our hooks to automatically inject the JWT token from localStorage.
+  - The UI components are custom-built using Tailwind and Framer Motion for maximum polish and fluid interactions.
