@@ -34,6 +34,7 @@ export function useAuth() {
   const { data: user, isLoading, error } = useQuery<User>({
     queryKey: ["/api/auth/me"],
     queryFn: () => fetchApi("/api/auth/me"),
+    enabled: !!localStorage.getItem("token"),
     retry: false,
     staleTime: 5 * 60 * 1000,
   });

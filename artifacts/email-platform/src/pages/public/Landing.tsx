@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { ArrowRight, CheckCircle2, Zap, Shield, BarChart, Server } from "lucide-react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button, Card, CardContent } from "@/components/ui/core";
+import { cn } from "@/lib/utils";
 
 export function Landing() {
   const fadeIn = {

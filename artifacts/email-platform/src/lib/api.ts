@@ -24,8 +24,8 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
       errorMessage = response.statusText;
     }
     
-    // Auto logout on 401
-    if (response.status === 401) {
+    // Only auto-logout on 401 if there was a token (expired session, not anonymous visit)
+    if (response.status === 401 && token) {
       localStorage.removeItem("token");
       window.dispatchEvent(new Event("auth-unauthorized"));
     }
