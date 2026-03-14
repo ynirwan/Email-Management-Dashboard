@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Mail, LayoutDashboard, Users, CreditCard, Settings, LogOut, Menu, X } from "lucide-react";
+import { Mail, LayoutDashboard, Users, CreditCard, Settings, LogOut, Menu, X, Shield, ClipboardList } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -14,25 +14,25 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     return <div className="min-h-screen flex items-center justify-center bg-background"><Spinner className="w-12 h-12" /></div>;
   }
 
-  if (!user) return null; // handled by protected route logic, but just in case
+  if (!user) return null;
 
   const navigation = [
-    { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Overview",      href: "/dashboard",           icon: LayoutDashboard },
     ...(user.role === "admin" ? [
-      { name: "Users", href: "/dashboard/users", icon: Users },
-      { name: "Plans", href: "/dashboard/plans", icon: CreditCard },
-      { name: "Settings", href: "/dashboard/settings", icon: Settings },
+      { name: "Users",        href: "/dashboard/users",     icon: Users },
+      { name: "Licenses",     href: "/dashboard/licenses",  icon: Shield },
+      { name: "Plans",        href: "/dashboard/plans",     icon: CreditCard },
+      { name: "Audit Logs",   href: "/dashboard/audit",     icon: ClipboardList },
+      { name: "Settings",     href: "/dashboard/settings",  icon: Settings },
     ] : [])
   ];
 
   return (
     <div className="min-h-screen flex bg-muted/30">
-      {/* Mobile sidebar overlay */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setMobileMenuOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={cn(
         "fixed inset-y-0 left-0 z-50 w-72 bg-sidebar text-sidebar-foreground transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:block flex flex-col shadow-2xl lg:shadow-none border-r border-sidebar-border",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
@@ -57,8 +57,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <Link key={item.name} href={item.href}>
                 <div className={cn(
                   "flex items-center gap-3 px-3 py-3 rounded-xl font-medium transition-all group cursor-pointer",
-                  isActive 
-                    ? "bg-primary/10 text-primary" 
+                  isActive
+                    ? "bg-primary/10 text-primary"
                     : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white"
                 )}>
                   <item.icon className={cn("w-5 h-5 transition-colors", isActive ? "text-primary" : "text-sidebar-foreground/50 group-hover:text-white")} />
@@ -79,7 +79,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <p className="text-xs text-sidebar-foreground/60 truncate capitalize">{user.role}</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => logout()}
             className="w-full flex items-center gap-3 px-3 py-3 rounded-xl font-medium text-sidebar-foreground/70 hover:bg-destructive/10 hover:text-destructive transition-colors"
           >
@@ -89,7 +89,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-20 bg-background/80 backdrop-blur-md border-b border-border/50 flex items-center px-4 sm:px-8 lg:hidden sticky top-0 z-30">
           <button onClick={() => setMobileMenuOpen(true)} className="p-2 -ml-2 rounded-lg text-foreground/70 hover:bg-accent/10">
@@ -97,7 +96,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </button>
           <span className="ml-4 font-display font-bold text-lg">ZeniPost</span>
         </header>
-        
+
         <div className="flex-1 overflow-auto p-4 sm:p-8">
           <div className="max-w-6xl mx-auto w-full">
             {children}

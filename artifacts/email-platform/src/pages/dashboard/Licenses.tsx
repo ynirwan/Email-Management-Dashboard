@@ -18,12 +18,21 @@ import {
   Clock,
   RefreshCw,
   X,
+  ExternalLink,
+  AlertTriangle,
+  Copy,
+  CheckCircle2,
+  Wrench,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import {
   useLicenses,
   useGenerateLicense,
   useRevokeLicense,
   useRenewLicense,
+  useAdminToken,
+  useToggleManaged,
 } from "@/hooks/use-licenses";
 import { useUsers } from "@/hooks/use-users";
 import { format, differenceInDays, parseISO } from "date-fns";
@@ -249,6 +258,7 @@ export function Licenses() {
   const [statusFilter, setStatusFilter] = useState("");
   const [planFilter, setPlanFilter] = useState("");
   const [showGenerate, setShowGenerate] = useState(false);
+  const [accessLicense, setAccessLicense] = useState<any>(null);
   const [detailLicense, setDetailLicense] = useState<any>(null);
 
   // Try real API first; fall back to mock data
@@ -474,7 +484,15 @@ export function Licenses() {
                       className="hover:bg-muted/20 transition-colors"
                     >
                       <td className="px-5 py-3.5 font-medium">
-                        {lic.customerName}
+                        <div className="flex items-center gap-2">
+                          {lic.customerName}
+                          {lic.isManaged && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 shrink-0">
+                              <Wrench className="w-2.5 h-2.5" />
+                              Managed
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5">
                         <code className="text-xs bg-muted/60 px-1.5 py-0.5 rounded font-mono text-muted-foreground">
@@ -521,6 +539,17 @@ export function Licenses() {
                           >
                             Detail
                           </Button>
+                          {(lic.status === "active" || lic.status === "expiring") && lic.isManaged && lic.adminAccessEnabled ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 border-blue-300 text-blue-600 hover:bg-blue-50"
+                              onClick={() => setAccessLicense(lic)}
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              Access App
+                            </Button>
+                          ) : null}
                           {lic.status !== "revoked" &&
                             lic.status !== "expired" && (
                               <Button
@@ -554,6 +583,14 @@ export function Licenses() {
         <LicenseDetailModal
           license={detailLicense}
           onClose={() => setDetailLicense(null)}
+        />
+      )}
+
+      {/* Access App Modal */}
+      {accessLicense && (
+        <AccessAppModal
+          license={accessLicense}
+          onClose={() => setAccessLicense(null)}
         />
       )}
     </DashboardLayout>
@@ -739,8 +776,34 @@ function LicenseDetailModal({
   license: any;
   onClose: () => void;
 }) {
-  const renewMutation = useRenewLicense();
+  const renewMutation  = useRenewLicense();
   const revokeMutation = useRevokeLicense();
+  const managedMutation = useToggleManaged();
+  const [noteInput, setNoteInput] = useState(lic.managedNote ?? "");
+  const [localManaged, setLocalManaged]       = useState<boolean>(lic.isManaged ?? false);
+  const [localAccess,  setLocalAccess]        = useState<boolean>(lic.adminAccessEnabled ?? false);
+
+  const handleManagedToggle = (newValue: boolean) => {
+    const action = newValue ? "opt_in" : "opt_out";
+    managedMutation.mutate(
+      { id: lic.id, action, note: noteInput || undefined },
+      {
+        onSuccess: () => {
+          setLocalManaged(newValue);
+          if (!newValue) setLocalAccess(false);
+          else setLocalAccess(true);
+        },
+      }
+    );
+  };
+
+  const handleAccessToggle = (newValue: boolean) => {
+    const action = newValue ? "enable_access" : "disable_access";
+    managedMutation.mutate(
+      { id: lic.id, action },
+      { onSuccess: () => setLocalAccess(newValue) }
+    );
+  };
 
   const jsonPreview = JSON.stringify(
     {
@@ -766,6 +829,98 @@ function LicenseDetailModal({
       description={`lic_${lic.customerName.toLowerCase().replace(/\s+/g, "_")}_${lic.plan} · RSA-SHA256`}
     >
       <div className="space-y-4">
+
+        {/* ── Managed Service Panel ── */}
+        <div className="rounded-2xl border border-border/60 overflow-hidden">
+          <div className="bg-muted/40 px-4 py-3 border-b border-border/40">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Wrench className="w-3.5 h-3.5" />
+              Managed Services
+            </p>
+          </div>
+          <div className="p-4 space-y-4">
+
+            {/* Managed toggle */}
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold">Managed Customer</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Customer has opted into ZeniPost Managed Services (SMTP, deliverability, support).
+                </p>
+                {localManaged && lic.managedSince && (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Managed since {new Date(lic.managedSince).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => handleManagedToggle(!localManaged)}
+                disabled={managedMutation.isPending}
+                className="shrink-0 mt-0.5"
+                title={localManaged ? "Remove managed status" : "Mark as managed customer"}
+              >
+                {localManaged
+                  ? <ToggleRight className="w-8 h-8 text-blue-600" />
+                  : <ToggleLeft  className="w-8 h-8 text-muted-foreground" />
+                }
+              </button>
+            </div>
+
+            {/* Admin access toggle — only shown when managed */}
+            {localManaged && (
+              <div className="flex items-start justify-between gap-4 pt-3 border-t border-border/40">
+                <div>
+                  <p className="text-sm font-semibold">Admin Login Access</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Allow ZeniPost admins to log into this customer's app via the dashboard.
+                    Disable temporarily if customer requests a privacy window.
+                  </p>
+                  {!localAccess && localManaged && (
+                    <p className="text-[10px] text-amber-600 font-semibold mt-1">
+                      ⚠ Access disabled — "Access App" button is hidden for this license.
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleAccessToggle(!localAccess)}
+                  disabled={managedMutation.isPending}
+                  className="shrink-0 mt-0.5"
+                  title={localAccess ? "Disable admin access" : "Enable admin access"}
+                >
+                  {localAccess
+                    ? <ToggleRight className="w-8 h-8 text-emerald-600" />
+                    : <ToggleLeft  className="w-8 h-8 text-muted-foreground" />
+                  }
+                </button>
+              </div>
+            )}
+
+            {/* Internal note */}
+            <div className="pt-3 border-t border-border/40">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                Internal Note
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={noteInput}
+                  onChange={(e) => setNoteInput(e.target.value)}
+                  placeholder="e.g. SMTP Basic, SES us-east-1, onboarded Mar 2026"
+                  className="flex-1 text-xs h-9 rounded-xl border-2 border-input bg-background px-3 focus:outline-none focus:border-primary transition-all"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => managedMutation.mutate({ id: lic.id, action: localManaged ? "opt_in" : "opt_out", note: noteInput })}
+                  isLoading={managedMutation.isPending}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <pre className="bg-sidebar text-xs font-mono text-sidebar-foreground/80 rounded-xl p-4 overflow-x-auto leading-relaxed">
           {jsonPreview}
         </pre>
@@ -830,6 +985,178 @@ function LicenseDetailModal({
             </Button>
           )}
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Access App Modal ──────────────────────────────────────────────────────────
+// Generates a short-lived admin access token and opens the customer's app
+// in a new tab with automatic super-admin login. Token expires in 15 minutes.
+function AccessAppModal({ license: lic, onClose }: { license: any; onClose: () => void }) {
+  const adminTokenMutation = useAdminToken();
+  const [tokenData, setTokenData]   = useState<any>(null);
+  const [copied, setCopied]         = useState(false);
+  const [countdown, setCountdown]   = useState(0);
+
+  const handleGenerate = () => {
+    adminTokenMutation.mutate(lic.id, {
+      onSuccess: (data) => {
+        setTokenData(data);
+        setCountdown(900); // 15 min in seconds
+      },
+    });
+  };
+
+  // Countdown timer
+  useState(() => {
+    if (countdown <= 0) return;
+    const t = setInterval(() => setCountdown((c) => {
+      if (c <= 1) { clearInterval(t); return 0; }
+      return c - 1;
+    }), 1000);
+    return () => clearInterval(t);
+  });
+
+  const handleOpenApp = () => {
+    if (tokenData?.accessUrl) {
+      window.open(tokenData.accessUrl, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const handleCopyUrl = () => {
+    if (tokenData?.accessUrl) {
+      navigator.clipboard?.writeText(tokenData.accessUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const minutes = Math.floor(countdown / 60);
+  const seconds = countdown % 60;
+  const isExpired = tokenData && countdown === 0;
+
+  return (
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title="Access Customer App"
+      description={`Generate a temporary admin login link for ${lic.domain}`}
+    >
+      <div className="space-y-4">
+
+        {/* License info */}
+        <div className="rounded-xl bg-muted/40 border border-border/50 p-4 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Customer</span>
+            <span className="font-semibold">{lic.customerName}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Domain</span>
+            <code className="font-mono text-xs bg-background border border-border/50 px-2 py-0.5 rounded-lg">{lic.domain}</code>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Plan</span>
+            <span className="font-semibold capitalize">{lic.plan}</span>
+          </div>
+        </div>
+
+        {/* Security warning */}
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-800 space-y-1">
+              <p className="font-semibold">Security Notice</p>
+              <p>This generates a <strong>super-admin login link</strong> valid for 15 minutes only. It will be logged in the audit trail. Do not share this link with anyone.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Not yet generated */}
+        {!tokenData && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground text-center py-2">
+              Click below to generate a secure one-time access link. The link expires in 15 minutes.
+            </p>
+            <Button
+              className="w-full gap-2"
+              onClick={handleGenerate}
+              isLoading={adminTokenMutation.isPending}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Generate Access Link
+            </Button>
+          </div>
+        )}
+
+        {/* Token generated */}
+        {tokenData && (
+          <div className="space-y-4">
+
+            {/* Countdown */}
+            <div className={`rounded-xl border p-4 text-center ${isExpired ? "bg-destructive/10 border-destructive/30" : "bg-emerald-50 border-emerald-200"}`}>
+              {isExpired ? (
+                <div>
+                  <p className="text-sm font-semibold text-destructive">Token Expired</p>
+                  <p className="text-xs text-destructive/80 mt-0.5">Generate a new link to continue</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-3xl font-mono font-bold text-emerald-700 tabular-nums">
+                    {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+                  </p>
+                  <p className="text-xs text-emerald-700 mt-1 font-medium">remaining before expiry</p>
+                </div>
+              )}
+            </div>
+
+            {/* Access URL */}
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Access URL</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-[10px] font-mono bg-muted/40 border border-border/50 rounded-xl px-3 py-2.5 break-all text-muted-foreground">
+                  {tokenData.accessUrl}
+                </code>
+                <button
+                  onClick={handleCopyUrl}
+                  className="p-2.5 rounded-xl border border-border/50 hover:bg-accent/10 transition-colors shrink-0"
+                  title="Copy URL"
+                >
+                  {copied
+                    ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    : <Copy className="w-4 h-4 text-muted-foreground" />
+                  }
+                </button>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              {!isExpired ? (
+                <Button className="flex-1 gap-2" onClick={handleOpenApp}>
+                  <ExternalLink className="w-4 h-4" />
+                  Open in New Tab
+                </Button>
+              ) : (
+                <Button
+                  className="flex-1 gap-2"
+                  variant="outline"
+                  onClick={() => { setTokenData(null); setCountdown(0); handleGenerate(); }}
+                  isLoading={adminTokenMutation.isPending}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Generate New Link
+                </Button>
+              )}
+              <Button variant="outline" onClick={onClose}>Close</Button>
+            </div>
+
+            <p className="text-[10px] text-center text-muted-foreground">
+              Access logged as {tokenData.issuedBy} at {new Date(tokenData.issuedAt).toLocaleTimeString()}
+            </p>
+          </div>
+        )}
+
       </div>
     </Modal>
   );
