@@ -14,23 +14,16 @@ router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      res.status(400).json({ error: "Bad Request", message: "Email and password required" });
-      return;
+      res.status(400).json({ error: "Bad Request", message: "Email and password required" }); return;
     }
-
     const users = await db.select().from(usersTable).where(eq(usersTable.email, email.toLowerCase())).limit(1);
-    const user = users[0];
-
+    const user  = users[0];
     if (!user || !verifyPassword(password, user.hashedPassword)) {
-      res.status(401).json({ error: "Unauthorized", message: "Invalid email or password" });
-      return;
+      res.status(401).json({ error: "Unauthorized", message: "Invalid email or password" }); return;
     }
-
     if (!user.isActive) {
-      res.status(401).json({ error: "Unauthorized", message: "Account is deactivated" });
-      return;
+      res.status(401).json({ error: "Unauthorized", message: "Account is deactivated" }); return;
     }
-
     const token = createToken({ userId: user.id, email: user.email, role: user.role });
     res.json({ token, user: serializeUser(user) });
   } catch (err) {
@@ -43,31 +36,25 @@ router.post("/register", async (req, res) => {
   try {
     const { name, email, password, company } = req.body;
     if (!name || !email || !password) {
-      res.status(400).json({ error: "Bad Request", message: "Name, email and password required" });
-      return;
+      res.status(400).json({ error: "Bad Request", message: "Name, email and password required" }); return;
     }
-
     const existing = await db.select().from(usersTable).where(eq(usersTable.email, email.toLowerCase())).limit(1);
     if (existing[0]) {
-      res.status(400).json({ error: "Bad Request", message: "Email already registered" });
-      return;
+      res.status(400).json({ error: "Bad Request", message: "Email already registered" }); return;
     }
-
-    const hashed = hashPassword(password);
     const [user] = await db.insert(usersTable).values({
       name,
-      email: email.toLowerCase(),
-      hashedPassword: hashed,
-      company: company || null,
-      role: "user",
-      plan: "free",
-      isActive: true,
-      emailsUsed: 0,
-      emailsLimit: 500,
-      subscribersUsed: 0,
+      email:            email.toLowerCase(),
+      hashedPassword:   hashPassword(password),
+      company:          company || null,
+      role:             "user",
+      plan:             "free",
+      isActive:         true,
+      emailsUsed:       0,
+      emailsLimit:      2500,
+      subscribersUsed:  0,
       subscribersLimit: 500,
     }).returning();
-
     const token = createToken({ userId: user.id, email: user.email, role: user.role });
     res.status(201).json({ token, user: serializeUser(user) });
   } catch (err) {
@@ -77,8 +64,7 @@ router.post("/register", async (req, res) => {
 });
 
 router.get("/me", requireAuth, (req, res) => {
-  const user = (req as any).user;
-  res.json(serializeUser(user));
+  res.json(serializeUser((req as any).user));
 });
 
 router.post("/logout", requireAuth, (_req, res) => {

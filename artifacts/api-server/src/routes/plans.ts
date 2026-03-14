@@ -2,77 +2,88 @@ import { Router } from "express";
 
 const router = Router();
 
-const PLANS = [
+export const PLAN_DEFINITIONS = [
   {
     id: "free",
     name: "Free",
     price: 0,
-    emailsPerMonth: 500,
-    subscribers: 500,
+    emailsPerMonth: 2500,
+    subscribersLimit: 500,
+    isPopular: false,
+    badge: null,
+    description: "Try ZeniPost with no commitment",
     features: [
-      "500 emails/month",
+      "2,500 emails/month",
       "500 subscribers",
       "Basic templates",
-      "Email support",
+      "Campaign management",
+      "Basic reports",
+      "Community support",
     ],
-    isPopular: false,
+    featureFlags: [] as string[],
   },
   {
     id: "starter",
     name: "Starter",
-    price: 29,
-    emailsPerMonth: 50000,
-    subscribers: 5000,
+    price: 35,
+    emailsPerMonth: 75000,
+    subscribersLimit: 15000,
+    isPopular: true,
+    badge: "Best Value",
+    description: "Everything you need to grow your list",
     features: [
-      "50,000 emails/month",
-      "5,000 subscribers",
+      "75,000 emails/month",
+      "15,000 subscribers",
       "All templates",
-      "Campaign analytics",
-      "A/B testing",
+      "Advanced analytics",
+      "List segmentation",
+      "Custom sending domains",
+      "API access",
+      "GDPR tools",
       "Priority support",
     ],
-    isPopular: false,
+    featureFlags: ["analytics_advanced", "segmentation", "custom_domains", "api_access", "gdpr_tools"],
   },
   {
     id: "pro",
     name: "Pro",
-    price: 79,
+    price: 75,
     emailsPerMonth: 250000,
-    subscribers: 50000,
+    subscribersLimit: 50000,
+    isPopular: false,
+    badge: null,
+    description: "Advanced tools for serious email marketers",
     features: [
       "250,000 emails/month",
       "50,000 subscribers",
-      "All templates",
-      "Advanced analytics",
+      "Everything in Starter",
       "A/B testing",
       "Automation workflows",
-      "Custom domains",
-      "Priority support",
-    ],
-    isPopular: true,
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    price: 199,
-    emailsPerMonth: 9999999,
-    subscribers: 9999999,
-    features: [
-      "Unlimited emails",
-      "Unlimited subscribers",
-      "All features",
-      "Dedicated IP",
-      "Custom integrations",
-      "SLA guarantee",
+      "White label",
+      "Audit trail",
       "Dedicated support",
-      "White labeling",
     ],
-    isPopular: false,
+    featureFlags: [
+      "analytics_advanced", "segmentation", "custom_domains", "api_access",
+      "gdpr_tools", "ab_testing", "automation", "white_label", "audit_trail",
+    ],
   },
 ];
 
+export const FEATURE_LABELS: Record<string, string> = {
+  analytics_advanced: "Advanced Analytics",
+  segmentation:       "List Segmentation",
+  custom_domains:     "Custom Sending Domains",
+  api_access:         "API Access",
+  gdpr_tools:         "GDPR Tools",
+  ab_testing:         "A/B Testing",
+  automation:         "Automation Workflows",
+  white_label:        "White Label",
+  audit_trail:        "Audit Trail",
+};
+
 router.get("/", (_req, res) => {
-  res.json({ plans: PLANS });
+  res.json({ plans: PLAN_DEFINITIONS, featureLabels: FEATURE_LABELS });
 });
 
 export default router;
