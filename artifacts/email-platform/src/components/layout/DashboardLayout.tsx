@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Mail, LayoutDashboard, Users, CreditCard, Settings, LogOut, Menu, X, Shield, ClipboardList } from "lucide-react";
+import { Mail, LayoutDashboard, Users, CreditCard, Settings, LogOut, Menu, X, Globe } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -17,13 +17,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   const navigation = [
-    { name: "Overview",      href: "/dashboard",           icon: LayoutDashboard },
+    { name: "Overview",  href: "/dashboard",          icon: LayoutDashboard },
+    { name: "Domains",   href: "/dashboard/domains",  icon: Globe },
     ...(user.role === "admin" ? [
-      { name: "Users",        href: "/dashboard/users",     icon: Users },
-      { name: "Licenses",     href: "/dashboard/licenses",  icon: Shield },
-      { name: "Plans",        href: "/dashboard/plans",     icon: CreditCard },
-      { name: "Audit Logs",   href: "/dashboard/audit",     icon: ClipboardList },
-      { name: "Settings",     href: "/dashboard/settings",  icon: Settings },
+      { name: "Users",    href: "/dashboard/users",    icon: Users },
+      { name: "Plans",    href: "/dashboard/plans",    icon: CreditCard },
+      { name: "Settings", href: "/dashboard/settings", icon: Settings },
     ] : [])
   ];
 

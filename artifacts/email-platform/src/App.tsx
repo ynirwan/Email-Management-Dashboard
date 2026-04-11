@@ -12,9 +12,7 @@ import { Overview }   from "@/pages/dashboard/Overview";
 import { Users }      from "@/pages/dashboard/Users";
 import { Plans }      from "@/pages/dashboard/Plans";
 import { Settings }   from "@/pages/dashboard/Settings";
-import { Licenses }   from "@/pages/dashboard/Licenses";
-import { AuditLogs }  from "@/pages/dashboard/AuditLogs";
-import { Billing }    from "@/pages/dashboard/Billing";
+import { Domains }    from "@/pages/dashboard/Domains";
 import { useAuth }    from "@/hooks/use-auth";
 
 const queryClient = new QueryClient({
@@ -53,20 +51,14 @@ function Router() {
       <Route path="/dashboard/users">
         {() => <AdminRoute component={Users} />}
       </Route>
-      <Route path="/dashboard/licenses">
-        {() => <AdminRoute component={Licenses} />}
-      </Route>
-      <Route path="/dashboard/billing">
-        {() => <AdminRoute component={Billing} />}
-      </Route>
       <Route path="/dashboard/plans">
         {() => <AdminRoute component={Plans} />}
       </Route>
-      <Route path="/dashboard/audit">
-        {() => <AdminRoute component={AuditLogs} />}
-      </Route>
       <Route path="/dashboard/settings">
         {() => <AdminRoute component={Settings} />}
+      </Route>
+      <Route path="/dashboard/domains">
+        {() => <ProtectedRoute component={Domains} />}
       </Route>
 
       <Route component={NotFound} />
