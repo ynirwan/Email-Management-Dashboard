@@ -115,7 +115,7 @@ router.patch("/:id/plan", requireAdmin, async (req, res) => {
   try {
     const id = parseIdParam(req.params.id);
     const { plan } = req.body;
-    if (!["free", "starter", "pro", "enterprise"].includes(plan)) {
+    if (!["starter", "pro", "agency"].includes(plan)) {
       res.status(400).json({ error: "Bad Request", message: "Invalid plan" });
       return;
     }

@@ -39,10 +39,10 @@ import { format, differenceInDays, parseISO } from "date-fns";
 import { formatNumber } from "@/lib/utils";
 
 const PLAN_DEFAULTS: Record<string, { emails: number; subs: number }> = {
-  free: { emails: 500, subs: 500 },
-  starter: { emails: 15000, subs: 5000 },
-  pro: { emails: 50000, subs: 10000 },
-  enterprise: { emails: 500000, subs: 100000 },
+  starter: { emails: 100000, subs: 25000 },
+  pro: { emails: 500000, subs: 100000 },
+  agency: { emails: 1000000, subs: 250000 },
+  
 };
 
 const ALL_FEATURES = [
@@ -72,7 +72,6 @@ const FEATURE_LABELS: Record<string, string> = {
 };
 
 const PLAN_DEFAULT_FEATURES: Record<string, string[]> = {
-  free: [],
   starter: ["analytics_advanced", "suppression_management"],
   pro: [
     "ab_testing",
@@ -85,7 +84,7 @@ const PLAN_DEFAULT_FEATURES: Record<string, string[]> = {
     "gdpr_tools",
     "audit_trail",
   ],
-  enterprise: [...ALL_FEATURES],
+  agency: [...ALL_FEATURES],
 };
 
 function statusBadge(status: string) {
@@ -115,10 +114,9 @@ function statusBadge(status: string) {
 
 function planBadge(plan: string) {
   const cls: Record<string, string> = {
-    free: "bg-muted/60 text-muted-foreground",
     starter: "bg-blue-500/10 text-blue-600",
     pro: "bg-primary/10 text-primary",
-    enterprise: "bg-purple-500/10 text-purple-600",
+    agency: "bg-purple-500/10 text-purple-600",
   };
   return (
     <span
@@ -151,7 +149,7 @@ const MOCK_LICENSES = [
     customerId: 2,
     customerName: "Nimbus Inc",
     domain: "mail.nimbus.app",
-    plan: "enterprise",
+    plan: "agency",
     emailsPerMonth: 500000,
     subscribersLimit: 100000,
     features: [...ALL_FEATURES],
@@ -196,7 +194,7 @@ const MOCK_LICENSES = [
     customerId: 5,
     customerName: "FlowTech",
     domain: "mailer.flowtech.io",
-    plan: "enterprise",
+    plan: "agency",
     emailsPerMonth: 500000,
     subscribersLimit: 100000,
     features: [...ALL_FEATURES],
@@ -226,7 +224,7 @@ const MOCK_LICENSES = [
     customerId: 7,
     customerName: "BlueSky Media",
     domain: "email.bluesky.media",
-    plan: "free",
+    plan: "starter",
     emailsPerMonth: 500,
     subscribersLimit: 500,
     features: [],
@@ -436,10 +434,10 @@ export function Licenses() {
             onChange={(e) => setPlanFilter(e.target.value)}
           >
             <option value="">All Plans</option>
-            <option value="free">Free</option>
+            
             <option value="starter">Starter</option>
             <option value="pro">Pro</option>
-            <option value="enterprise">Enterprise</option>
+            <option value="agency">Agency</option>
           </select>
           <span className="ml-auto text-xs text-muted-foreground">
             {filtered.length} licenses
@@ -669,10 +667,10 @@ function GenerateLicenseModal({
               onChange={(e) => handlePlanChange(e.target.value)}
               className="flex h-11 w-full rounded-xl border-2 border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:border-primary transition-all"
             >
-              <option value="free">Free</option>
+              
               <option value="starter">Starter</option>
               <option value="pro">Pro</option>
-              <option value="enterprise">Enterprise</option>
+              <option value="agency">Agency</option>
             </select>
           </div>
         </div>

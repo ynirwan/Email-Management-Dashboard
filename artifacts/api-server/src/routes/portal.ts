@@ -70,7 +70,7 @@ router.get("/", requireAuth, async (req, res) => {
       ])
     );
 
-    const planInfo = PLAN_LIMITS[user.plan] ?? PLAN_LIMITS.free;
+    const planInfo = PLAN_LIMITS[user.plan] ?? PLAN_LIMITS.starter;
 
     res.json({
       user: {

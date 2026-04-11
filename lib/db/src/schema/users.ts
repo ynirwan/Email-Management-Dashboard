@@ -11,7 +11,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const userRoleEnum = pgEnum("user_role", ["admin", "user"]);
-export const userPlanEnum = pgEnum("user_plan", ["free", "starter", "pro", "enterprise"]);
+export const userPlanEnum = pgEnum("user_plan", ["starter", "pro", "agency"]);
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -20,7 +20,7 @@ export const usersTable = pgTable("users", {
   company: text("company"),
   hashedPassword: text("hashed_password").notNull(),
   role: userRoleEnum("role").notNull().default("user"),
-  plan: userPlanEnum("plan").notNull().default("free"),
+  plan: userPlanEnum("plan").notNull().default("starter"),
   isActive: boolean("is_active").notNull().default(true),
   emailsUsed: integer("emails_used").notNull().default(0),
   emailsLimit: integer("emails_limit").notNull().default(2500),

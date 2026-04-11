@@ -9,7 +9,7 @@ export interface User {
   email: string;
   company?: string | null;
   role: "admin" | "user";
-  plan: "free" | "starter" | "pro" | "enterprise";
+  plan: "starter" | "pro" | "agency";
   isActive: boolean;
   emailsUsed: number;
   emailsLimit: number;

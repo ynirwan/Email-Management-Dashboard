@@ -27,7 +27,7 @@ router.get("/summary", requireAuth, async (req, res) => {
         count: count(),
       }).from(usersTable).groupBy(usersTable.plan);
 
-      const planBreakdown = { free: 0, starter: 0, pro: 0, enterprise: 0 };
+      const planBreakdown = { starter: 0, pro: 0, agency: 0 };
       for (const row of planCounts) {
         planBreakdown[row.plan as keyof typeof planBreakdown] = Number(row.count);
       }
@@ -47,10 +47,9 @@ router.get("/summary", requireAuth, async (req, res) => {
         totalEmailsSent: user.emailsUsed,
         totalSubscribers: user.subscribersUsed,
         planBreakdown: {
-          free: user.plan === "free" ? 1 : 0,
           starter: user.plan === "starter" ? 1 : 0,
           pro: user.plan === "pro" ? 1 : 0,
-          enterprise: user.plan === "enterprise" ? 1 : 0,
+          agency: user.plan === "agency" ? 1 : 0,
         },
       });
     }

@@ -40,12 +40,11 @@ function generateLicensePayload(domain: any, user: any) {
 
 function getLicenseFeatures(plan: string): string[] {
   const features: Record<string, string[]> = {
-    free: ["basic-campaigns", "subscriber-management"],
-    starter: ["basic-campaigns", "subscriber-management", "analytics", "ab-testing", "automation-basic"],
-    pro: ["basic-campaigns", "subscriber-management", "analytics", "ab-testing", "automation-advanced", "custom-domains", "api-access"],
-    enterprise: ["basic-campaigns", "subscriber-management", "analytics", "ab-testing", "automation-advanced", "custom-domains", "api-access", "dedicated-ip", "white-label", "sla", "priority-support"],
+    starter: ["basic-campaigns", "subscriber-management", "analytics", "custom-domains"],
+    pro: ["basic-campaigns", "subscriber-management", "analytics", "ab-testing", "automation-advanced", "custom-domains", "api-access", "webhooks"],
+    agency: ["basic-campaigns", "subscriber-management", "analytics", "ab-testing", "automation-advanced", "custom-domains", "api-access", "webhooks", "white-label", "audit-logs", "team-roles"],
   };
-  return features[plan] || features.free;
+  return features[plan] || features.starter;
 }
 
 // GET all domains for current user
