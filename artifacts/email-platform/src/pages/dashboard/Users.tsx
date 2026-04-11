@@ -154,10 +154,9 @@ export function Users() {
               defaultValue={editingUser?.plan}
               className="flex h-12 w-full rounded-xl border-2 border-input bg-background px-4 py-2 text-sm focus-visible:outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/10 transition-all capitalize"
             >
-              <option value="free">Free</option>
               <option value="starter">Starter</option>
               <option value="pro">Pro</option>
-              <option value="enterprise">Enterprise</option>
+              <option value="agency">Agency</option>
             </select>
           </div>
           <div className="flex justify-end gap-3">

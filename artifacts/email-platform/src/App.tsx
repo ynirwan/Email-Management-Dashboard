@@ -15,6 +15,9 @@ import { Settings }   from "@/pages/dashboard/Settings";
 import { Licenses }   from "@/pages/dashboard/Licenses";
 import { AuditLogs }  from "@/pages/dashboard/AuditLogs";
 import { Billing }    from "@/pages/dashboard/Billing";
+import { UserBilling } from "@/pages/dashboard/UserBilling";
+import { UserLicenses } from "@/pages/dashboard/UserLicenses";
+import { Account } from "@/pages/dashboard/Account";
 import { useAuth }    from "@/hooks/use-auth";
 
 const queryClient = new QueryClient({
@@ -54,9 +57,18 @@ function Router() {
         {() => <AdminRoute component={Users} />}
       </Route>
       <Route path="/dashboard/licenses">
-        {() => <AdminRoute component={Licenses} />}
+        {() => <ProtectedRoute component={UserLicenses} />}
       </Route>
       <Route path="/dashboard/billing">
+        {() => <ProtectedRoute component={UserBilling} />}
+      </Route>
+      <Route path="/dashboard/account">
+        {() => <ProtectedRoute component={Account} />}
+      </Route>
+      <Route path="/dashboard/admin/licenses">
+        {() => <AdminRoute component={Licenses} />}
+      </Route>
+      <Route path="/dashboard/admin/billing">
         {() => <AdminRoute component={Billing} />}
       </Route>
       <Route path="/dashboard/plans">

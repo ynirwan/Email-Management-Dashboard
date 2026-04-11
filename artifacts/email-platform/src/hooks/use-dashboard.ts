@@ -7,10 +7,9 @@ export interface StatsSummary {
   totalEmailsSent: number;
   totalSubscribers: number;
   planBreakdown: {
-    free: number;
     starter: number;
     pro: number;
-    enterprise: number;
+    agency: number;
   };
 }
 

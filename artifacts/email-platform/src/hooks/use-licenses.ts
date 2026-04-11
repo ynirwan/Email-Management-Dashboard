@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchApi } from "@/lib/api";
 
 export type LicenseStatus = "active" | "expiring" | "revoked" | "expired";
-export type LicensePlan   = "free" | "starter" | "pro" | "enterprise";
+export type LicensePlan   = "starter" | "pro" | "agency";
 
 export interface License {
   id: number;
@@ -84,6 +84,15 @@ export function useRevokeLicense() {
   });
 }
 
+export function useUnrevokeLicense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      fetchApi(`/api/licenses/unrevoke/${id}`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/licenses"] }),
+  });
+}
+
 export function useRenewLicense() {
   const qc = useQueryClient();
   return useMutation({
@@ -112,17 +121,15 @@ export const FEATURE_LABELS: Record<string, string> = {
 export const ALL_FEATURES = Object.keys(FEATURE_LABELS);
 
 export const PLAN_DEFAULT_FEATURES: Record<LicensePlan, string[]> = {
-  free:       [],
   starter:    ["analytics_advanced", "suppression_management"],
   pro:        ["ab_testing", "automation", "segmentation", "analytics_advanced", "custom_domains", "suppression_management", "api_access", "gdpr_tools", "audit_trail"],
-  enterprise: [...ALL_FEATURES],
+  agency: [...ALL_FEATURES],
 };
 
 export const PLAN_QUOTAS: Record<LicensePlan, { emails: number; subs: number }> = {
-  free:       { emails: 500,    subs: 500 },
-  starter:    { emails: 15000,  subs: 5000 },
-  pro:        { emails: 50000,  subs: 10000 },
-  enterprise: { emails: 500000, subs: 100000 },
+  starter:    { emails: 100000,  subs: 25000 },
+  pro:        { emails: 500000,  subs: 100000 },
+  agency: { emails: 1000000, subs: 250000 },
 };
 
 // ── useAdminToken — generate short-lived admin access token for a license ─────

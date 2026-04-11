@@ -1,174 +1,132 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
-import { ArrowRight, CheckCircle2, Zap, Shield, BarChart, Server } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Zap,
+  Shield,
+  BarChart,
+  Server,
+  Mail,
+  Activity,
+  Send,
+  Users,
+  Filter,
+  FlaskConical,
+  BarChart3,
+  TrendingUp,
+  Globe,
+  Lock,
+  Cpu,
+  Tag,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  Wifi,
+  Code2,
+  Building2,
+  Briefcase,
+} from "lucide-react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button, Card, CardContent } from "@/components/ui/core";
-import { cn } from "@/lib/utils";
 
 export function Landing() {
-  const fadeIn = {
-    initial: { opacity: 0, y: 20 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.6, ease: "easeOut" }
-  };
+  const licensePlans = [
+    { name: "Starter License", price: "$49", installs: "1", support: "$29/year", features: ["1 server/domain", "Multi-user shared workspace", "Campaign management", "All template editors", "Subscriber management", "Basic analytics", "Suppression list", "Custom sending domains", "Community support"], popular: true },
+    { name: "Pro License", price: "$149", installs: "Up to 3", support: "$49/year", features: ["Everything in Starter", "Automation workflows", "A/B testing", "Advanced segmentation", "API access", "Webhooks", "Priority support"] },
+    { name: "Agency License", price: "$299", installs: "Unlimited", support: "$99/year", features: ["Everything in Pro", "White label", "Client usage allowed", "Audit logs", "Team roles & permissions", "Advanced reporting"] },
+  ];
 
-  const staggerContainer = {
-    animate: { transition: { staggerChildren: 0.1 } }
-  };
+  const deliveryPlans = [
+    { name: "Starter Delivery", price: "$29/month", volume: "100,000 emails/month", infra: "Shared IP", routing: "Basic routing" },
+    { name: "Growth Delivery", price: "$79/month", volume: "500,000 emails/month", infra: "Optimized routing", routing: "Better inbox placement" },
+    { name: "Scale Delivery", price: "$149/month", volume: "1,000,000 emails/month", infra: "Priority queue", routing: "Warmup system" },
+    { name: "Dedicated Infrastructure", price: "$299+/month", volume: "Custom volume", infra: "Dedicated IP", routing: "Reputation management + custom scaling" },
+  ];
 
   return (
     <PublicLayout>
-      {/* HERO SECTION */}
-      <section className="relative pt-20 pb-32 overflow-hidden">
-        <div className="absolute inset-0 -z-10">
-          <img 
-            src={`${import.meta.env.BASE_URL}images/hero-bg.png`}
-            alt="Hero Background" 
-            className="w-full h-full object-cover opacity-90"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/80 to-background" />
-        </div>
-        
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <motion.div initial="initial" animate="animate" variants={staggerContainer} className="max-w-3xl mx-auto">
-            <motion.div variants={fadeIn} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary font-semibold text-sm mb-8 border border-primary/20 backdrop-blur-sm">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-              </span>
-              ZeniPost v2.0 is now live
-            </motion.div>
-            
-            <motion.h1 variants={fadeIn} className="text-5xl md:text-7xl font-display font-extrabold text-foreground leading-[1.1] mb-6">
-              Send emails your way. <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600">Own your data.</span>
-            </motion.h1>
-            
-            <motion.p variants={fadeIn} className="text-xl text-muted-foreground mb-10 leading-relaxed">
-              The powerful, self-hosted email marketing platform. Drag & drop builder, advanced automation, and AWS SES integration with zero hidden fees.
-            </motion.p>
-            
-            <motion.div variants={fadeIn} className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/register">
-                <Button size="lg" className="w-full sm:w-auto gap-2 text-lg">
-                  Start Free Trial <ArrowRight className="w-5 h-5" />
-                </Button>
-              </Link>
-              <Link href="#features">
-                <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg bg-background/50 backdrop-blur-sm">
-                  View Features
-                </Button>
-              </Link>
-            </motion.div>
-          </motion.div>
-
-          <motion.div 
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-            className="mt-20 relative mx-auto max-w-5xl"
-          >
-            <div className="rounded-2xl overflow-hidden shadow-2xl border border-border/50 bg-background/50 backdrop-blur-md p-2">
-              <img 
-                src={`${import.meta.env.BASE_URL}images/dashboard-mockup.png`} 
-                alt="ZeniPost Dashboard" 
-                className="w-full rounded-xl"
-              />
-            </div>
-          </motion.div>
+      <section className="py-24 text-center">
+        <h1 className="text-5xl md:text-6xl font-display font-extrabold mb-6">
+          Run your own email infrastructure — without deliverability headaches
+        </h1>
+        <p className="text-xl text-muted-foreground max-w-3xl mx-auto mb-8">
+          Self-hosted email platform. Install on your server and send using your own SMTP or our optimized delivery.
+        </p>
+        <div className="flex gap-4 justify-center">
+          <Link href="#how"><Button size="lg">View Setup Guide</Button></Link>
+          <Link href="#pricing"><Button size="lg" variant="outline">Buy License <ArrowRight className="w-4 h-4" /></Button></Link>
         </div>
       </section>
 
-      {/* FEATURES */}
-      <section id="features" className="py-24 bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Everything you need to grow</h2>
-            <p className="text-lg text-muted-foreground">Built for marketers, designed for developers. Get the perfect balance of ease-of-use and technical flexibility.</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { icon: Zap, title: "Visual Campaign Builder", desc: "Design beautiful emails with our drag-and-drop editor or code your own HTML templates." },
-              { icon: BarChart, title: "Real-Time Analytics", desc: "Track opens, clicks, bounces, and conversions with beautiful, actionable dashboards." },
-              { icon: Server, title: "Self-Hosted Control", desc: "Keep your subscriber data on your own servers. Never worry about arbitrary platform bans." },
-            ].map((feature, i) => (
-              <Card key={i} className="bg-card hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border-border/50">
-                <CardContent className="p-8">
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-6">
-                    <feature.icon className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-xl font-bold mb-3 font-display">{feature.title}</h3>
-                  <p className="text-muted-foreground leading-relaxed">{feature.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+      <section id="how" className="py-16">
+        <div className="max-w-5xl mx-auto grid md:grid-cols-5 gap-4 text-sm">
+          {["Install on your server", "Create users (shared workspace)", "Connect SMTP (SES, SendGrid, etc.)", "Send campaigns", "Optimize deliverability (optional upgrade)"].map((step) => (
+            <Card key={step}><CardContent className="p-5">{step}</CardContent></Card>
+          ))}
         </div>
       </section>
 
-      {/* PRICING */}
-      <section id="pricing" className="py-24 bg-muted/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Simple, transparent pricing</h2>
-            <p className="text-lg text-muted-foreground">No hidden fees. Just pay for what you use.</p>
-          </div>
-
-          <div className="grid md:grid-cols-4 gap-8">
-            {[
-              { name: "Free", price: "0", emails: "500", subs: "500", features: ["Basic Templates", "Community Support"] },
-              { name: "Starter", price: "29", emails: "50k", subs: "5k", features: ["Automation builder", "Email Support"] },
-              { name: "Pro", price: "79", emails: "250k", subs: "50k", features: ["A/B Testing", "Priority Support", "Custom Domain"], popular: true },
-              { name: "Enterprise", price: "199", emails: "Unlimited", subs: "Unlimited", features: ["Dedicated IP", "SLA", "Custom Integration"] },
-            ].map((plan, i) => (
-              <Card key={i} className={cn("relative overflow-hidden transition-all duration-300", plan.popular ? "border-primary shadow-xl scale-105 z-10" : "border-border/50 hover:border-primary/50")}>
-                {plan.popular && (
-                  <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary to-blue-500" />
-                )}
-                <CardContent className="p-8 flex flex-col h-full">
-                  {plan.popular && <span className="absolute top-4 right-4 bg-primary/10 text-primary text-xs font-bold px-3 py-1 rounded-full">Most Popular</span>}
-                  <h3 className="text-xl font-bold font-display text-muted-foreground mb-2">{plan.name}</h3>
-                  <div className="mb-6">
-                    <span className="text-4xl font-extrabold text-foreground">${plan.price}</span>
-                    <span className="text-muted-foreground">/mo</span>
-                  </div>
-                  <ul className="space-y-4 mb-8 flex-1">
-                    <li className="flex items-center gap-3 text-sm font-medium">
-                      <CheckCircle2 className="w-5 h-5 text-primary" /> Up to {plan.emails} emails
-                    </li>
-                    <li className="flex items-center gap-3 text-sm font-medium">
-                      <CheckCircle2 className="w-5 h-5 text-primary" /> {plan.subs} subscribers
-                    </li>
-                    {plan.features.map(f => (
-                      <li key={f} className="flex items-center gap-3 text-sm text-muted-foreground">
-                        <CheckCircle2 className="w-5 h-5 text-primary/50" /> {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <Link href="/register">
-                    <Button variant={plan.popular ? "default" : "outline"} className="w-full">
-                      Get Started
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+      <section className="py-16 bg-muted/30">
+        <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-8">
+          <Card><CardContent className="p-8"><h3 className="text-2xl font-bold mb-3">DIY (Free Path)</h3><p className="text-muted-foreground">Use your SMTP, keep costs low, manage setup yourself.</p></CardContent></Card>
+          <Card><CardContent className="p-8"><h3 className="text-2xl font-bold mb-3">Managed (Paid Path)</h3><p className="text-muted-foreground mb-4">Better inbox placement, optimized routing, dedicated infrastructure.</p><Button>Get Managed Setup</Button></CardContent></Card>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-24 relative overflow-hidden bg-foreground text-background">
-        <div className="absolute inset-0 bg-primary/20 mix-blend-multiply" />
-        <div className="max-w-4xl mx-auto px-4 relative z-10 text-center">
-          <h2 className="text-4xl md:text-5xl font-display font-bold mb-6">Ready to take control?</h2>
-          <p className="text-xl text-background/80 mb-10">Join thousands of businesses who have switched to ZeniPost for better deliverability and control.</p>
-          <Link href="/register">
-            <Button size="lg" className="bg-white text-foreground hover:bg-white/90 text-lg px-8 h-14">
-              Create your free account
-            </Button>
-          </Link>
+      <section id="pricing" className="py-24">
+        <div className="text-center mb-10">
+          <h2 className="text-4xl font-display font-bold">Buy once. Host anywhere.</h2>
+          <p className="text-muted-foreground mt-2">Use your own SMTP or upgrade to managed delivery anytime.</p>
+        </div>
+        <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+          {licensePlans.map((plan) => (
+            <Card key={plan.name} className={plan.popular ? "border-primary shadow-lg" : ""}>
+              <CardContent className="p-7">
+                <h3 className="text-xl font-bold">{plan.name}</h3>
+                <p className="text-3xl font-extrabold mt-2">{plan.price} <span className="text-base font-medium text-muted-foreground">one-time</span></p>
+                <p className="text-sm mt-3">Installations: <strong>{plan.installs}</strong></p>
+                <p className="text-sm">Shared Workspace: <strong>Yes</strong></p>
+                <p className="text-sm mb-4">Support + Updates: <strong>{plan.support}</strong></p>
+                <ul className="space-y-2 text-sm">
+                  {plan.features.map((f) => <li key={f} className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-primary mt-0.5" />{f}</li>)}
+                </ul>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <section className="py-20 bg-muted/30">
+        <div className="text-center mb-10">
+          <h2 className="text-4xl font-display font-bold">Fix deliverability. Stop landing in spam.</h2>
+          <p className="text-muted-foreground mt-2">Optimized infrastructure with IP warmup, routing, and reputation management.</p>
+          <p className="text-sm text-muted-foreground mt-2">Need better deliverability? Add optimized email infrastructure.</p>
+        </div>
+        <div className="grid md:grid-cols-4 gap-6 max-w-7xl mx-auto">
+          {deliveryPlans.map((plan) => (
+            <Card key={plan.name}>
+              <CardContent className="p-6">
+                <h3 className="font-bold">{plan.name}</h3>
+                <p className="text-2xl font-extrabold mt-2">{plan.price}</p>
+                <p className="text-sm mt-2">{plan.volume}</p>
+                <p className="text-sm text-muted-foreground">{plan.infra}</p>
+                <p className="text-sm text-muted-foreground">{plan.routing}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <section className="py-20 text-center">
+        <h2 className="text-3xl font-bold mb-4">Start with your own SMTP or let us handle everything.</h2>
+        <p className="text-muted-foreground mb-6">Buy once. Host anywhere. Scale with your own SMTP or our delivery.</p>
+        <div className="flex gap-4 justify-center">
+          <Button>Buy License</Button>
+          <Button variant="outline">Get Managed Setup</Button>
         </div>
       </section>
     </PublicLayout>
