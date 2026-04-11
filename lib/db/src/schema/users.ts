@@ -11,7 +11,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const userRoleEnum = pgEnum("user_role", ["admin", "user"]);
-export const userPlanEnum = pgEnum("user_plan", ["free", "starter", "pro"]);
+export const userPlanEnum = pgEnum("user_plan", ["free", "starter", "pro", "enterprise"]);
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),

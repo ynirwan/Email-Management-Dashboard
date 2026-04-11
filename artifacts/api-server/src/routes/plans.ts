@@ -68,6 +68,31 @@ export const PLAN_DEFINITIONS = [
       "gdpr_tools", "ab_testing", "automation", "white_label", "audit_trail",
     ],
   },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    price: 299,
+    emailsPerMonth: 1000000,
+    subscribersLimit: 250000,
+    isPopular: false,
+    badge: "Custom",
+    description: "High-volume sending, compliance, and managed support",
+    features: [
+      "1,000,000 emails/month",
+      "250,000 subscribers",
+      "Everything in Pro",
+      "Dedicated infrastructure options",
+      "Advanced deliverability support",
+      "Managed services",
+      "Custom integrations",
+      "Priority SLA support",
+    ],
+    featureFlags: [
+      "analytics_advanced", "segmentation", "custom_domains", "api_access",
+      "gdpr_tools", "ab_testing", "automation", "white_label", "audit_trail",
+      "managed_services", "priority_sla", "custom_integrations",
+    ],
+  },
 ];
 
 export const FEATURE_LABELS: Record<string, string> = {
@@ -80,6 +105,9 @@ export const FEATURE_LABELS: Record<string, string> = {
   automation:         "Automation Workflows",
   white_label:        "White Label",
   audit_trail:        "Audit Trail",
+  managed_services:   "Managed Services",
+  priority_sla:       "Priority SLA Support",
+  custom_integrations:"Custom Integrations",
 };
 
 router.get("/", (_req, res) => {
