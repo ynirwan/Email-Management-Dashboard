@@ -26,7 +26,7 @@ export interface BillingSummary {
   planBreakdown: { plan: string; count: number; revenue: number }[];
 }
 
-export const PLAN_PRICES: Record<string, number> = { free: 0, starter: 35, pro: 75 };
+export const PLAN_PRICES: Record<string, number> = { starter: 49, pro: 149, agency: 299 };
 
 export function useInvoices(page = 1, limit = 20) {
   return useQuery<{ invoices: Invoice[]; total: number; page: number; limit: number }>({

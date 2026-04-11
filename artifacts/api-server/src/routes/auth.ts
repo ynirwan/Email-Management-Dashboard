@@ -48,12 +48,12 @@ router.post("/register", async (req, res) => {
       hashedPassword:   hashPassword(password),
       company:          company || null,
       role:             "user",
-      plan:             "free",
+      plan:             "starter",
       isActive:         true,
       emailsUsed:       0,
-      emailsLimit:      2500,
+      emailsLimit:      100000,
       subscribersUsed:  0,
-      subscribersLimit: 500,
+      subscribersLimit: 25000,
     }).returning();
     const token = createToken({ userId: user.id, email: user.email, role: user.role });
     res.status(201).json({ token, user: serializeUser(user) });
