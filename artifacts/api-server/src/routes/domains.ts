@@ -7,6 +7,11 @@ import crypto from "crypto";
 
 const router = Router();
 
+function parseIdParam(value: string | string[]): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return parseInt(raw, 10);
+}
+
 const LICENSE_SECRET = process.env["LICENSE_SECRET"] || "zenipost-license-secret-key";
 
 function generateLicenseKey(): string {
@@ -35,12 +40,11 @@ function generateLicensePayload(domain: any, user: any) {
 
 function getLicenseFeatures(plan: string): string[] {
   const features: Record<string, string[]> = {
-    free: ["basic-campaigns", "subscriber-management"],
-    starter: ["basic-campaigns", "subscriber-management", "analytics", "ab-testing", "automation-basic"],
-    pro: ["basic-campaigns", "subscriber-management", "analytics", "ab-testing", "automation-advanced", "custom-domains", "api-access"],
-    enterprise: ["basic-campaigns", "subscriber-management", "analytics", "ab-testing", "automation-advanced", "custom-domains", "api-access", "dedicated-ip", "white-label", "sla", "priority-support"],
+    starter: ["basic-campaigns", "subscriber-management", "analytics", "custom-domains"],
+    pro: ["basic-campaigns", "subscriber-management", "analytics", "ab-testing", "automation-advanced", "custom-domains", "api-access", "webhooks"],
+    agency: ["basic-campaigns", "subscriber-management", "analytics", "ab-testing", "automation-advanced", "custom-domains", "api-access", "webhooks", "white-label", "audit-logs", "team-roles"],
   };
-  return features[plan] || features.free;
+  return features[plan] || features.starter;
 }
 
 // GET all domains for current user
@@ -111,7 +115,7 @@ router.post("/", requireAuth, async (req, res) => {
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req.params.id);
 
     const domains = await db.select().from(domainsTable).where(eq(domainsTable.id, id)).limit(1);
     const domain = domains[0];
@@ -137,7 +141,7 @@ router.delete("/:id", requireAuth, async (req, res) => {
 router.post("/:id/license", requireAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req.params.id);
 
     const domains = await db.select().from(domainsTable).where(eq(domainsTable.id, id)).limit(1);
     const domain = domains[0];
@@ -186,7 +190,7 @@ router.patch("/:id/verify", requireAuth, async (req, res) => {
       res.status(403).json({ error: "Forbidden", message: "Admin only" });
       return;
     }
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req.params.id);
     const [updated] = await db.update(domainsTable).set({ isVerified: true }).where(eq(domainsTable.id, id)).returning();
     if (!updated) {
       res.status(404).json({ error: "Not Found", message: "Domain not found" });

@@ -4,14 +4,14 @@ import { z } from "zod/v4";
 import { usersTable } from "./users";
 
 export const licenseStatusEnum = pgEnum("license_status", ["active", "expiring", "revoked", "expired"]);
-export const licensePlanEnum   = pgEnum("license_plan",   ["free", "starter", "pro"]);
+export const licensePlanEnum   = pgEnum("license_plan",   ["starter", "pro", "agency"]);
 
 export const licensesTable = pgTable("licenses", {
   id:               serial("id").primaryKey(),
   customerId:       integer("customer_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   domain:           text("domain").notNull().unique(),
   rootDomain:       text("root_domain").notNull().default(""),
-  plan:             licensePlanEnum("plan").notNull().default("free"),
+  plan:             licensePlanEnum("plan").notNull().default("starter"),
   emailsPerMonth:   integer("emails_per_month").notNull().default(2500),
   subscribersLimit: integer("subscribers_limit").notNull().default(500),
   features:         text("features").notNull().default("[]"),

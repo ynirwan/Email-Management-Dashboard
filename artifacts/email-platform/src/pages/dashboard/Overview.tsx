@@ -41,10 +41,9 @@ export function Overview() {
   ];
 
   const pieData = [
-    { name: "Free",       value: stats.planBreakdown.free,       color: "#94a3b8" },
-    { name: "Starter",    value: stats.planBreakdown.starter,    color: "#38bdf8" },
-    { name: "Pro",        value: stats.planBreakdown.pro,        color: "#0d9488" },
-    { name: "Enterprise", value: stats.planBreakdown.enterprise, color: "#1e293b" },
+    { name: "Starter", value: stats.planBreakdown.starter, color: "#38bdf8" },
+    { name: "Pro",     value: stats.planBreakdown.pro,     color: "#0d9488" },
+    { name: "Agency",  value: stats.planBreakdown.agency,  color: "#1e293b" },
   ].filter((d) => d.value > 0);
 
   return (

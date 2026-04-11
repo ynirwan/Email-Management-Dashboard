@@ -21,12 +21,12 @@ async function seedAdmin() {
     hashedPassword,
     company: "ZeniPost",
     role: "admin",
-    plan: "enterprise",
+    plan: "agency",
     isActive: true,
     emailsUsed: 12543,
-    emailsLimit: 9999999,
+    emailsLimit: 1000000,
     subscribersUsed: 4821,
-    subscribersLimit: 9999999,
+    subscribersLimit: 250000,
   });
 
   console.log("✅ Admin user created:");
@@ -35,10 +35,10 @@ async function seedAdmin() {
 
   // Also seed a few demo users
   const demoUsers = [
-    { name: "Alice Johnson", email: "alice@acme.com", plan: "pro" as const, emailsUsed: 75000, emailsLimit: 250000, subscribersUsed: 12000, subscribersLimit: 50000 },
-    { name: "Bob Smith", email: "bob@startup.io", plan: "starter" as const, emailsUsed: 8000, emailsLimit: 50000, subscribersUsed: 1200, subscribersLimit: 5000 },
-    { name: "Carol Davis", email: "carol@shop.com", plan: "free" as const, emailsUsed: 320, emailsLimit: 500, subscribersUsed: 150, subscribersLimit: 500 },
-    { name: "David Lee", email: "david@agency.net", plan: "enterprise" as const, emailsUsed: 500000, emailsLimit: 9999999, subscribersUsed: 80000, subscribersLimit: 9999999, company: "Lee Agency" },
+    { name: "Alice Johnson", email: "alice@acme.com", plan: "pro" as const, emailsUsed: 75000, emailsLimit: 500000, subscribersUsed: 12000, subscribersLimit: 100000 },
+    { name: "Bob Smith", email: "bob@startup.io", plan: "starter" as const, emailsUsed: 8000, emailsLimit: 100000, subscribersUsed: 1200, subscribersLimit: 25000 },
+    { name: "Carol Davis", email: "carol@shop.com", plan: "starter" as const, emailsUsed: 320, emailsLimit: 100000, subscribersUsed: 150, subscribersLimit: 25000 },
+    { name: "David Lee", email: "david@agency.net", plan: "agency" as const, emailsUsed: 500000, emailsLimit: 1000000, subscribersUsed: 80000, subscribersLimit: 250000, company: "Lee Agency" },
   ];
 
   for (const user of demoUsers) {

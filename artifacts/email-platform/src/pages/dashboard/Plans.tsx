@@ -6,18 +6,16 @@ import { formatCurrency, formatNumber } from "@/lib/utils";
 import { CheckCircle2, Check, Minus, Edit2 } from "lucide-react";
 
 const FEATURE_MATRIX = [
-  { label: "Campaign Manager",       free: true,  starter: true,  pro: true,  enterprise: true  },
-  { label: "A/B Testing",            free: false, starter: false, pro: true,  enterprise: true  },
-  { label: "Automation Workflows",   free: false, starter: false, pro: true,  enterprise: true  },
-  { label: "Advanced Segmentation",  free: false, starter: false, pro: true,  enterprise: true  },
-  { label: "Analytics & Reports",    free: false, starter: true,  pro: true,  enterprise: true  },
-  { label: "Custom Sending Domains", free: false, starter: false, pro: true,  enterprise: true  },
-  { label: "Suppression Management", free: false, starter: true,  pro: true,  enterprise: true  },
-  { label: "API Access",             free: false, starter: false, pro: true,  enterprise: true  },
-  { label: "GDPR Tools",             free: false, starter: false, pro: true,  enterprise: true  },
-  { label: "Audit Trail",            free: false, starter: false, pro: true,  enterprise: true  },
-  { label: "White Label",            free: false, starter: false, pro: false, enterprise: true  },
-  { label: "Dedicated Support + SLA",free: false, starter: false, pro: false, enterprise: true  },
+  { label: "Campaign Manager",            starter: true,  pro: true,  agency: true  },
+  { label: "Template Editors",            starter: true,  pro: true,  agency: true  },
+  { label: "Subscriber Management",       starter: true,  pro: true,  agency: true  },
+  { label: "A/B Testing",                 starter: false, pro: true,  agency: true  },
+  { label: "Automation Workflows",        starter: false, pro: true,  agency: true  },
+  { label: "Advanced Segmentation",       starter: false, pro: true,  agency: true  },
+  { label: "API + Webhooks",              starter: false, pro: true,  agency: true  },
+  { label: "White Label",                 starter: false, pro: false, agency: true  },
+  { label: "Audit Logs",                  starter: false, pro: false, agency: true  },
+  { label: "Team Roles & Permissions",    starter: false, pro: false, agency: true  },
 ];
 
 export function Plans() {
@@ -29,7 +27,7 @@ export function Plans() {
       <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold">Plans & Pricing</h1>
-          <p className="text-muted-foreground mt-1">Manage customer plan tiers and included features.</p>
+                  <p className="text-muted-foreground mt-1">One-time software license pricing and included capabilities.</p>
         </div>
         <Button onClick={() => data?.plans?.[0] && setEditingPlan(data.plans[0])}>
           <Edit2 className="w-4 h-4" />Edit Plans
@@ -63,22 +61,26 @@ export function Plans() {
                       <span className="text-4xl font-extrabold font-display">
                         {formatCurrency(plan.price).replace(".00", "")}
                       </span>
-                      <span className="text-muted-foreground font-medium text-sm">/mo</span>
+                      <span className="text-muted-foreground font-medium text-sm">one-time</span>
                     </div>
                   </div>
 
                   <div className="space-y-3 text-sm mb-5">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Emails/mo</span>
+                      <span className="text-muted-foreground">Installations</span>
                       <span className="font-semibold">
-                        {plan.emailsPerMonth >= 9000000 ? "Unlimited" : formatNumber(plan.emailsPerMonth)}
+                        {plan.installations >= 9000000 ? "Unlimited" : formatNumber(plan.installations)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Subscribers</span>
+                      <span className="text-muted-foreground">Shared Workspace</span>
                       <span className="font-semibold">
-                        {plan.subscribers >= 9000000 ? "Unlimited" : formatNumber(plan.subscribers)}
+                        {plan.sharedWorkspace ? "Yes" : "No"}
                       </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Support + Updates</span>
+                      <span className="font-semibold">{formatCurrency(plan.supportAndUpdatesYearly)}/year</span>
                     </div>
                   </div>
 
@@ -121,7 +123,7 @@ export function Plans() {
                 <thead className="border-b border-border/50 bg-muted/30">
                   <tr>
                     <th className="px-6 py-3 text-left font-semibold text-muted-foreground text-xs uppercase tracking-wider">Feature</th>
-                    {["Free", "Starter", "Pro", "Enterprise"].map((p) => (
+                    {["Starter", "Pro", "Agency"].map((p) => (
                       <th key={p} className="px-6 py-3 text-center font-semibold text-xs uppercase tracking-wider text-muted-foreground">{p}</th>
                     ))}
                   </tr>
@@ -130,7 +132,7 @@ export function Plans() {
                   {FEATURE_MATRIX.map((row) => (
                     <tr key={row.label} className="hover:bg-muted/20 transition-colors">
                       <td className="px-6 py-3 font-medium">{row.label}</td>
-                      {(["free", "starter", "pro", "enterprise"] as const).map((plan) => (
+                      {(["starter", "pro", "agency"] as const).map((plan) => (
                         <td key={plan} className="px-6 py-3 text-center">
                           {row[plan] ? (
                             <Check className="w-4 h-4 text-primary mx-auto" />
@@ -145,6 +147,29 @@ export function Plans() {
               </table>
             </div>
           </Card>
+
+          {/* Delivery Add-ons */}
+          <div className="mt-10">
+            <h2 className="text-2xl font-display font-bold mb-2">Delivery & Infrastructure Add-ons</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Use your own SMTP or upgrade to managed delivery anytime.
+            </p>
+            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-5">
+              {data?.deliveryPlans?.map((plan) => (
+                <Card key={plan.id} className="border-border/50">
+                  <CardContent className="p-6">
+                    <h3 className="font-bold mb-1">{plan.name}</h3>
+                    <p className="text-2xl font-extrabold mb-3">{formatCurrency(plan.priceMonthly)}/mo</p>
+                    <p className="text-sm mb-1">
+                      {plan.emailsPerMonth > 0 ? `${formatNumber(plan.emailsPerMonth)} emails/month` : "Custom volume"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{plan.infrastructure}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{plan.routing}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
         </>
       )}
 
@@ -170,18 +195,18 @@ export function Plans() {
                 <Input defaultValue={editingPlan.name} className="h-11" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Price ($/month)</Label>
+                <Label className="text-xs">Price (one-time)</Label>
                 <Input type="number" defaultValue={editingPlan.price} className="h-11" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Emails / Month</Label>
-                <Input type="number" defaultValue={editingPlan.emailsPerMonth} className="h-11" />
+                <Label className="text-xs">Installations</Label>
+                <Input type="number" defaultValue={editingPlan.installations} className="h-11" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Subscriber Limit</Label>
-                <Input type="number" defaultValue={editingPlan.subscribers} className="h-11" />
+                <Label className="text-xs">Support + Updates ($/year)</Label>
+                <Input type="number" defaultValue={editingPlan.supportAndUpdatesYearly} className="h-11" />
               </div>
             </div>
 

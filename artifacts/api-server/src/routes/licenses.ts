@@ -13,6 +13,11 @@ const ADMIN_ACCESS_SECRET = process.env["ADMIN_ACCESS_SECRET"]  || "zenipost-adm
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function parseIdParam(value: string | string[]): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return parseInt(raw, 10);
+}
+
 function parseFeatures(raw: string): string[] {
   try { return JSON.parse(raw); } catch { return []; }
 }
@@ -100,7 +105,7 @@ router.get("/:id", requireAuth, async (req, res) => {
       .select({ lic: licensesTable, customer: { id: usersTable.id, name: usersTable.name, email: usersTable.email, company: usersTable.company } })
       .from(licensesTable)
       .leftJoin(usersTable, eq(licensesTable.customerId, usersTable.id))
-      .where(eq(licensesTable.id, parseInt(req.params.id)))
+      .where(eq(licensesTable.id, parseIdParam(req.params.id)))
       .limit(1);
     if (!rows[0]) { res.status(404).json({ error: "Not Found" }); return; }
     const { lic, customer } = rows[0];
@@ -186,7 +191,7 @@ router.post("/revoke/:id", requireAuth, async (req, res) => {
   try {
     const user = (req as any).user;
     if (user.role !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req.params.id);
     const [updated] = await db.update(licensesTable)
       .set({ status: "revoked", revokedAt: new Date(), updatedAt: new Date() })
       .where(eq(licensesTable.id, id)).returning();
@@ -197,12 +202,28 @@ router.post("/revoke/:id", requireAuth, async (req, res) => {
   }
 });
 
+// ── POST /api/licenses/unrevoke/:id ───────────────────────────────────────────
+router.post("/unrevoke/:id", requireAuth, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (user.role !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
+    const id = parseIdParam(req.params.id);
+    const [updated] = await db.update(licensesTable)
+      .set({ status: "active", revokedAt: null, updatedAt: new Date() })
+      .where(eq(licensesTable.id, id)).returning();
+    if (!updated) { res.status(404).json({ error: "Not Found" }); return; }
+    res.json({ message: "License unrevoked", license: formatLicense(updated) });
+  } catch (err) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 // ── POST /api/licenses/renew/:id ──────────────────────────────────────────────
 router.post("/renew/:id", requireAuth, async (req, res) => {
   try {
     const user = (req as any).user;
     if (user.role !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req.params.id);
     const { expiresAt } = req.body;
     if (!expiresAt) { res.status(400).json({ error: "expiresAt required" }); return; }
     const existing = await db.select().from(licensesTable).where(eq(licensesTable.id, id)).limit(1);
@@ -231,7 +252,7 @@ router.post("/renew/:id", requireAuth, async (req, res) => {
 router.post("/:id/admin-token", requireAdmin, async (req, res) => {
   try {
     const adminUser = (req as any).user;
-    const id        = parseInt(req.params.id);
+    const id        = parseIdParam(req.params.id);
 
     const rows = await db
       .select({ lic: licensesTable, customer: { name: usersTable.name, company: usersTable.company, email: usersTable.email } })
@@ -321,7 +342,7 @@ router.post("/:id/admin-token", requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.patch("/:id/managed", requireAdmin, async (req, res) => {
   try {
-    const id     = parseInt(req.params.id);
+    const id     = parseIdParam(req.params.id);
     const { action, note } = req.body;
 
     const validActions = ["opt_in", "opt_out", "enable_access", "disable_access"];
@@ -374,13 +395,15 @@ router.patch("/:id/managed", requireAdmin, async (req, res) => {
 
     console.log(`[MANAGED] action=${action} license=#${id} domain=${lic.domain} by admin`);
 
+    const actionMessage: Record<"opt_in" | "opt_out" | "enable_access" | "disable_access", string> = {
+      opt_in:         "Customer opted into managed services. Admin access enabled.",
+      opt_out:        "Customer removed from managed services. Admin access disabled.",
+      enable_access:  "Admin access enabled for this license.",
+      disable_access: "Admin access disabled. Managed service status unchanged.",
+    };
+
     res.json({
-      message: {
-        opt_in:         "Customer opted into managed services. Admin access enabled.",
-        opt_out:        "Customer removed from managed services. Admin access disabled.",
-        enable_access:  "Admin access enabled for this license.",
-        disable_access: "Admin access disabled. Managed service status unchanged.",
-      }[action],
+      message: actionMessage[action as keyof typeof actionMessage],
       license: formatLicense(updated, customerName),
     });
   } catch (err) {

@@ -18,7 +18,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const PLAN_COLORS: Record<string, string> = {
-  free: "text-slate-500", starter: "text-blue-600", pro: "text-teal-600", enterprise: "text-purple-600",
+  starter: "text-blue-600", pro: "text-teal-600", agency: "text-purple-600",
 };
 
 function fmt(amount: number) {
