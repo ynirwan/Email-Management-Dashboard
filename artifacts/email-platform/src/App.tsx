@@ -55,6 +55,9 @@ function Router() {
       <Route path="/dashboard">
         {() => <ProtectedRoute component={Overview} />}
       </Route>
+      <Route path="/dashboard/domains">
+        {() => <ProtectedRoute component={Domains} />}
+      </Route>
 
       <Route path="/dashboard/users">
         {() => <AdminRoute component={Users} />}

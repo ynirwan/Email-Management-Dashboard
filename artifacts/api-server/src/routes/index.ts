@@ -8,6 +8,7 @@ import statsRouter    from "./stats.js";
 import licensesRouter from "./licenses.js";
 import billingRouter  from "./billing.js";
 import portalRouter   from "./portal.js";
+import domainsRouter  from "./domains.js";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use("/stats",    statsRouter);
 router.use("/licenses", licensesRouter);
 router.use("/billing",  billingRouter);
 router.use("/portal",   portalRouter);
+router.use("/domains",  domainsRouter);
 
 export default router;
