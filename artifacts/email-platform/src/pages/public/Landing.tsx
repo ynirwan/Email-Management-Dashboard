@@ -1,7 +1,35 @@
+import { useState } from "react";
+import { motion } from "framer-motion";
 import { Link } from "wouter";
-import { CheckCircle2, ArrowRight } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Zap,
+  Shield,
+  BarChart,
+  Server,
+  Mail,
+  Activity,
+  Send,
+  Users,
+  Filter,
+  FlaskConical,
+  BarChart3,
+  TrendingUp,
+  Globe,
+  Lock,
+  Cpu,
+  Tag,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  Wifi,
+} from "lucide-react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button, Card, CardContent } from "@/components/ui/core";
+import { cn } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────
 // Full feature data — sourced from actual app capabilities
