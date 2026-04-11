@@ -15,7 +15,10 @@ import { Settings }   from "@/pages/dashboard/Settings";
 import { Licenses }   from "@/pages/dashboard/Licenses";
 import { AuditLogs }  from "@/pages/dashboard/AuditLogs";
 import { Billing }    from "@/pages/dashboard/Billing";
-import { Domains }    from "@/pages/dashboard/Domains";
+import { UserBilling } from "@/pages/dashboard/UserBilling";
+import { UserLicenses } from "@/pages/dashboard/UserLicenses";
+import { Account } from "@/pages/dashboard/Account";
+import { UserDomains } from "@/pages/dashboard/UserDomains";
 import { useAuth }    from "@/hooks/use-auth";
 
 const queryClient = new QueryClient({
