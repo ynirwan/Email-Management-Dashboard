@@ -1,0 +1,215 @@
+📄 PRIVACY POLICY
+Privacy Policy
+
+Last updated: [Date]
+
+[Your Company Name] ("we", "our", "us") operates [Website URL] and the ZeniPost software.
+
+We respect your privacy and are committed to protecting your information.
+
+## 1. Information We Collect
+
+### a) Website Information
+- Name, email (if you contact us)
+- Payment details (processed via third-party providers)
+- Usage data (IP address, browser, pages visited)
+
+### b) Software (ZeniPost)
+ZeniPost is self-hosted. We do NOT store your:
+- Subscriber data
+- Email content
+- Campaign data
+
+All such data remains on your server.
+
+## 2. How We Use Information
+We use collected data to:
+- Provide and improve our website
+- Process payments
+- Respond to support requests
+- Send important updates
+
+## 3. Cookies
+We use cookies for:
+- Basic site functionality
+- Analytics (if enabled)
+
+## 4. Third-Party Services
+We may use:
+- Payment processors (e.g., Stripe)
+- Analytics tools
+
+These services have their own privacy policies.
+
+## 5. Data Security
+We take reasonable measures to protect your data. However, no system is 100% secure.
+
+## 6. Your Rights
+You may request:
+- Access to your data
+- Deletion of your data
+
+Contact: [Email]
+
+## 7. Changes
+We may update this policy. Changes will be posted on this page.
+
+## 8. Contact
+[Your Company Name]  
+Email: [Email]
+📄 TERMS OF SERVICE
+Terms of Service
+
+Last updated: [Date]
+
+By purchasing or using ZeniPost, you agree to these terms.
+
+## 1. Product Nature
+
+ZeniPost is a self-hosted software product.
+
+- You install and run it on your own server
+- You are responsible for your infrastructure and usage
+
+## 2. License
+
+Upon purchase, you are granted a non-exclusive license to use the software.
+
+Restrictions:
+- No resale (except Agency license where allowed)
+- No redistribution of source code
+- No illegal usage
+
+## 3. Payments
+
+- Software license is a one-time payment
+- Support and delivery services are separate and optional
+- All payments are non-refundable unless required by law
+
+## 4. Support
+
+Support is NOT included with the license.
+
+Support is available as a paid service:
+- Monthly plans or one-time setup
+
+## 5. Delivery Services
+
+Delivery (email sending infrastructure) is a separate paid service.
+
+We are not responsible for:
+- Third-party SMTP issues
+- Email deliverability when using external providers
+
+## 6. User Responsibility
+
+You agree NOT to use ZeniPost for:
+- Spam
+- Illegal content
+- Unauthorized email campaigns
+
+You are solely responsible for compliance with applicable laws (e.g., GDPR, CAN-SPAM).
+
+## 7. Limitation of Liability
+
+We are not liable for:
+- Data loss
+- Deliverability issues
+- Server failures
+- Indirect or consequential damages
+
+## 8. Termination
+
+We reserve the right to:
+- Suspend services (support/delivery) for misuse
+- Refuse service at our discretion
+
+## 9. Changes
+
+We may update these terms at any time.
+
+## 10. Contact
+
+[Your Company Name]  
+Email: [Email]
+📄 COOKIE POLICY
+Cookie Policy
+
+Last updated: [Date]
+
+This Cookie Policy explains how we use cookies on [Website URL].
+
+## 1. What Are Cookies?
+
+Cookies are small text files stored on your device.
+
+## 2. How We Use Cookies
+
+We use cookies for:
+- Essential site functionality
+- Analytics (optional)
+
+## 3. Types of Cookies
+
+### Essential Cookies
+Required for basic operation of the site.
+
+### Analytics Cookies
+Help us understand usage (e.g., page visits).
+
+## 4. Third-Party Cookies
+
+We may use third-party services that set cookies, such as:
+- Analytics providers
+
+## 5. Managing Cookies
+
+You can control cookies via your browser settings.
+
+## 6. Changes
+
+We may update this policy.
+
+## 7. Contact
+
+[Your Company Name]  
+Email: [Email]
+📄 LEGAL (GENERAL PAGE)
+Legal
+
+This website and product are operated by:
+
+[Your Company Name]  
+[Your Address]  
+Email: [Email]
+
+## Product Summary
+
+ZeniPost is a self-hosted email marketing platform.
+
+- Software is installed on user-controlled servers
+- We do not host user data
+- Support and delivery services are optional and paid separately
+
+## Disclaimer
+
+We do not guarantee:
+- Email deliverability
+- Third-party service performance
+- Server uptime
+
+Users are responsible for:
+- Infrastructure
+- Compliance with laws
+- Proper usage
+
+## Intellectual Property
+
+All rights to ZeniPost software, branding, and content are owned by [Your Company Name].
+
+Unauthorized copying or redistribution is prohibited.
+
+## Contact
+
+For legal inquiries:
+Email: [Email]

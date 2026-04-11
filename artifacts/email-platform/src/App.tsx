@@ -20,6 +20,8 @@ import { UserLicenses } from "@/pages/dashboard/UserLicenses";
 import { Account } from "@/pages/dashboard/Account";
 import { useAuth }    from "@/hooks/use-auth";
 
+const Domains = UserDomains;
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
@@ -52,6 +54,9 @@ function Router() {
       <Route path="/dashboard">
         {() => <ProtectedRoute component={Overview} />}
       </Route>
+      <Route path="/dashboard/domains">
+        {() => <ProtectedRoute component={Domains} />}
+      </Route>
 
       <Route path="/dashboard/users">
         {() => <AdminRoute component={Users} />}
@@ -80,6 +85,12 @@ function Router() {
       <Route path="/dashboard/settings">
         {() => <AdminRoute component={Settings} />}
       </Route>
+
+      <Route path="/legal"          component={Legal} />
+      <Route path="/legal/privacy"  component={Privacy} />
+      <Route path="/legal/terms"    component={Terms} />
+      <Route path="/legal/refunds"  component={Refunds} />
+      <Route path="/legal/cookies"  component={Cookies} />
 
       <Route component={NotFound} />
     </Switch>
