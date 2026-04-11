@@ -3,9 +3,15 @@ import { db, usersTable, licensesTable, domainsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
+import { PLAN_DEFINITIONS } from "./plans.js";
 
 const router = Router();
 const LICENSE_SECRET = process.env["LICENSE_SECRET"] || "zenipost-license-secret-2026";
+
+function parseIdParam(value: string | string[]): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return parseInt(raw, 10);
+}
 
 function parseFeatures(raw: string): string[] {
   try { return JSON.parse(raw); } catch { return []; }
@@ -57,12 +63,12 @@ router.get("/", requireAuth, async (req, res) => {
     }));
 
     // Plan limits
-    const PLAN_LIMITS: Record<string, { emailsLimit: number; subscribersLimit: number; price: number }> = {
-      free:       { emailsLimit: 500,    subscribersLimit: 500,    price: 0 },
-      starter:    { emailsLimit: 15000,  subscribersLimit: 5000,   price: 29 },
-      pro:        { emailsLimit: 50000,  subscribersLimit: 10000,  price: 79 },
-      enterprise: { emailsLimit: 500000, subscribersLimit: 100000, price: 299 },
-    };
+    const PLAN_LIMITS: Record<string, { emailsLimit: number; subscribersLimit: number; price: number }> = Object.fromEntries(
+      PLAN_DEFINITIONS.map((plan) => [
+        plan.id,
+        { emailsLimit: plan.emailsPerMonth, subscribersLimit: plan.subscribersLimit, price: plan.price },
+      ])
+    );
 
     const planInfo = PLAN_LIMITS[user.plan] ?? PLAN_LIMITS.free;
 
@@ -94,7 +100,7 @@ router.get("/", requireAuth, async (req, res) => {
 router.get("/license/:id/download", requireAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    const id   = parseInt(req.params.id);
+    const id   = parseIdParam(req.params.id);
 
     const rows = await db.select().from(licensesTable).where(eq(licensesTable.id, id)).limit(1);
     const lic  = rows[0];

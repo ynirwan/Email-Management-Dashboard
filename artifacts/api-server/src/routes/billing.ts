@@ -10,6 +10,11 @@ const PLAN_PRICES   = Object.fromEntries(PLAN_DEFINITIONS.map((p) => [p.id, p.pr
 const PLAN_LIMITS   = Object.fromEntries(PLAN_DEFINITIONS.map((p) => [p.id, { emailsLimit: p.emailsPerMonth, subscribersLimit: p.subscribersLimit }]));
 const PLAN_FEATURES = Object.fromEntries(PLAN_DEFINITIONS.map((p) => [p.id, p.featureFlags]));
 
+function parseIdParam(value: string | string[]): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return parseInt(raw, 10);
+}
+
 function nextInvoiceNo() {
   return `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 90000) + 10000}`;
 }
@@ -52,7 +57,7 @@ router.get("/invoices", requireAuth, async (req, res) => {
 router.get("/invoices/:id", requireAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    const rows = await db.select().from(invoicesTable).where(eq(invoicesTable.id, parseInt(req.params.id))).limit(1);
+    const rows = await db.select().from(invoicesTable).where(eq(invoicesTable.id, parseIdParam(req.params.id))).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "Not Found" }); return; }
     if (user.role !== "admin" && rows[0].customerId !== user.id) { res.status(403).json({ error: "Forbidden" }); return; }
     const custs = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, company: usersTable.company })
@@ -85,7 +90,7 @@ router.patch("/invoices/:id/mark-paid", requireAdmin, async (req, res) => {
   try {
     const [upd] = await db.update(invoicesTable)
       .set({ status: "paid", paidAt: new Date(), updatedAt: new Date() })
-      .where(eq(invoicesTable.id, parseInt(req.params.id))).returning();
+      .where(eq(invoicesTable.id, parseIdParam(req.params.id))).returning();
     if (!upd) { res.status(404).json({ error: "Not Found" }); return; }
     res.json({ invoice: serialize(upd) });
   } catch (err) { res.status(500).json({ error: "Internal Server Error" }); }
@@ -96,7 +101,7 @@ router.patch("/invoices/:id/cancel", requireAdmin, async (req, res) => {
   try {
     const [upd] = await db.update(invoicesTable)
       .set({ status: "cancelled", updatedAt: new Date() })
-      .where(eq(invoicesTable.id, parseInt(req.params.id))).returning();
+      .where(eq(invoicesTable.id, parseIdParam(req.params.id))).returning();
     if (!upd) { res.status(404).json({ error: "Not Found" }); return; }
     res.json({ invoice: serialize(upd) });
   } catch (err) { res.status(500).json({ error: "Internal Server Error" }); }
@@ -107,7 +112,7 @@ router.post("/upgrade", requireAdmin, async (req, res) => {
   try {
     const { customerId, plan } = req.body;
     if (!customerId || !plan || !PLAN_PRICES.hasOwnProperty(plan)) {
-      res.status(400).json({ error: "customerId and valid plan (free|starter|pro) required" }); return;
+      res.status(400).json({ error: "customerId and valid plan (free|starter|pro|enterprise) required" }); return;
     }
     const cust = await db.select().from(usersTable).where(eq(usersTable.id, parseInt(customerId))).limit(1);
     if (!cust[0]) { res.status(404).json({ error: "Customer not found" }); return; }

@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { usersTable } from "./users";
 
 export const licenseStatusEnum = pgEnum("license_status", ["active", "expiring", "revoked", "expired"]);
-export const licensePlanEnum   = pgEnum("license_plan",   ["free", "starter", "pro"]);
+export const licensePlanEnum   = pgEnum("license_plan",   ["free", "starter", "pro", "enterprise"]);
 
 export const licensesTable = pgTable("licenses", {
   id:               serial("id").primaryKey(),

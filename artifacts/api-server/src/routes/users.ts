@@ -2,15 +2,21 @@ import { Router } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq, ilike, or, count, sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
+import { PLAN_DEFINITIONS } from "./plans.js";
 
 const router = Router();
 
-const PLAN_LIMITS: Record<string, { emailsLimit: number; subscribersLimit: number }> = {
-  free: { emailsLimit: 500, subscribersLimit: 500 },
-  starter: { emailsLimit: 50000, subscribersLimit: 5000 },
-  pro: { emailsLimit: 250000, subscribersLimit: 50000 },
-  enterprise: { emailsLimit: 9999999, subscribersLimit: 9999999 },
-};
+function parseIdParam(value: string | string[]): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return parseInt(raw, 10);
+}
+
+const PLAN_LIMITS: Record<string, { emailsLimit: number; subscribersLimit: number }> = Object.fromEntries(
+  PLAN_DEFINITIONS.map((plan) => [
+    plan.id,
+    { emailsLimit: plan.emailsPerMonth, subscribersLimit: plan.subscribersLimit },
+  ])
+);
 
 function serializeUser(user: any) {
   const { hashedPassword, ...rest } = user;
@@ -56,7 +62,7 @@ router.get("/", requireAdmin, async (req, res) => {
 
 router.get("/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req.params.id);
     const users = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
     if (!users[0]) {
       res.status(404).json({ error: "Not Found", message: "User not found" });
@@ -70,7 +76,7 @@ router.get("/:id", requireAdmin, async (req, res) => {
 
 router.patch("/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req.params.id);
     const { name, email, company, isActive } = req.body;
 
     const updateData: any = {};
@@ -92,7 +98,7 @@ router.patch("/:id", requireAdmin, async (req, res) => {
 
 router.delete("/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req.params.id);
     const currentUser = (req as any).user;
     if (currentUser.id === id) {
       res.status(400).json({ error: "Bad Request", message: "Cannot delete your own account" });
@@ -107,7 +113,7 @@ router.delete("/:id", requireAdmin, async (req, res) => {
 
 router.patch("/:id/plan", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req.params.id);
     const { plan } = req.body;
     if (!["free", "starter", "pro", "enterprise"].includes(plan)) {
       res.status(400).json({ error: "Bad Request", message: "Invalid plan" });
