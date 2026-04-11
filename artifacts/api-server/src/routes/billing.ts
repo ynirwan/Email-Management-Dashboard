@@ -112,7 +112,7 @@ router.post("/upgrade", requireAdmin, async (req, res) => {
   try {
     const { customerId, plan } = req.body;
     if (!customerId || !plan || !PLAN_PRICES.hasOwnProperty(plan)) {
-      res.status(400).json({ error: "customerId and valid plan (free|starter|pro|enterprise) required" }); return;
+      res.status(400).json({ error: "customerId and valid plan (starter|pro|agency) required" }); return;
     }
     const cust = await db.select().from(usersTable).where(eq(usersTable.id, parseInt(customerId))).limit(1);
     if (!cust[0]) { res.status(404).json({ error: "Customer not found" }); return; }

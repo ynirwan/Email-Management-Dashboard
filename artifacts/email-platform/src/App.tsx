@@ -21,6 +21,8 @@ import { Account } from "@/pages/dashboard/Account";
 import { UserDomains } from "@/pages/dashboard/UserDomains";
 import { useAuth }    from "@/hooks/use-auth";
 
+const Domains = UserDomains;
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
@@ -70,7 +72,7 @@ function Router() {
         {() => <ProtectedRoute component={Account} />}
       </Route>
       <Route path="/dashboard/domains">
-        {() => <ProtectedRoute component={UserDomains} />}
+        {() => <ProtectedRoute component={Domains} />}
       </Route>
 
       <Route path="/dashboard/admin/licenses">
