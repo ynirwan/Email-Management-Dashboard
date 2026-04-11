@@ -30,6 +30,7 @@ import {
   useLicenses,
   useGenerateLicense,
   useRevokeLicense,
+  useUnrevokeLicense,
   useRenewLicense,
   useAdminToken,
   useToggleManaged,
@@ -127,130 +128,6 @@ function planBadge(plan: string) {
   );
 }
 
-// ── Mock data used while backend endpoint doesn't exist yet ──────────────────
-const MOCK_LICENSES = [
-  {
-    id: 1,
-    customerId: 1,
-    customerName: "Acme Corp",
-    domain: "app.acme.io",
-    plan: "pro",
-    emailsPerMonth: 50000,
-    subscribersLimit: 10000,
-    features: ["ab_testing", "automation", "segmentation"],
-    issuedAt: "2026-03-13",
-    expiresAt: "2027-03-12",
-    revokedAt: null,
-    isActive: true,
-    status: "active",
-  },
-  {
-    id: 2,
-    customerId: 2,
-    customerName: "Nimbus Inc",
-    domain: "mail.nimbus.app",
-    plan: "agency",
-    emailsPerMonth: 500000,
-    subscribersLimit: 100000,
-    features: [...ALL_FEATURES],
-    issuedAt: "2025-12-01",
-    expiresAt: "2026-12-01",
-    revokedAt: null,
-    isActive: true,
-    status: "active",
-  },
-  {
-    id: 3,
-    customerId: 3,
-    customerName: "Torrent SaaS",
-    domain: "email.torrent.io",
-    plan: "pro",
-    emailsPerMonth: 50000,
-    subscribersLimit: 10000,
-    features: ["ab_testing", "segmentation"],
-    issuedAt: "2026-02-18",
-    expiresAt: "2027-02-18",
-    revokedAt: null,
-    isActive: true,
-    status: "active",
-  },
-  {
-    id: 4,
-    customerId: 4,
-    customerName: "Apex Digital",
-    domain: "send.apex.dev",
-    plan: "pro",
-    emailsPerMonth: 50000,
-    subscribersLimit: 10000,
-    features: ["automation", "analytics_advanced"],
-    issuedAt: "2026-01-28",
-    expiresAt: "2027-01-28",
-    revokedAt: null,
-    isActive: true,
-    status: "active",
-  },
-  {
-    id: 5,
-    customerId: 5,
-    customerName: "FlowTech",
-    domain: "mailer.flowtech.io",
-    plan: "agency",
-    emailsPerMonth: 500000,
-    subscribersLimit: 100000,
-    features: [...ALL_FEATURES],
-    issuedAt: "2025-11-15",
-    expiresAt: "2026-11-15",
-    revokedAt: null,
-    isActive: true,
-    status: "active",
-  },
-  {
-    id: 6,
-    customerId: 6,
-    customerName: "Velox Labs",
-    domain: "send.velox.co",
-    plan: "starter",
-    emailsPerMonth: 15000,
-    subscribersLimit: 5000,
-    features: ["analytics_advanced"],
-    issuedAt: "2025-03-25",
-    expiresAt: "2026-03-25",
-    revokedAt: null,
-    isActive: true,
-    status: "expiring",
-  },
-  {
-    id: 7,
-    customerId: 7,
-    customerName: "BlueSky Media",
-    domain: "email.bluesky.media",
-    plan: "starter",
-    emailsPerMonth: 500,
-    subscribersLimit: 500,
-    features: [],
-    issuedAt: "2026-03-01",
-    expiresAt: "2026-04-10",
-    revokedAt: null,
-    isActive: true,
-    status: "expiring",
-  },
-  {
-    id: 8,
-    customerId: 8,
-    customerName: "OldCo Ltd",
-    domain: "app.oldco.com",
-    plan: "starter",
-    emailsPerMonth: 15000,
-    subscribersLimit: 5000,
-    features: ["analytics_advanced"],
-    issuedAt: "2025-04-08",
-    expiresAt: "2025-10-08",
-    revokedAt: "2025-10-08",
-    isActive: false,
-    status: "revoked",
-  },
-] as any[];
-
 export function Licenses() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -259,25 +136,22 @@ export function Licenses() {
   const [accessLicense, setAccessLicense] = useState<any>(null);
   const [detailLicense, setDetailLicense] = useState<any>(null);
 
-  // Try real API first; fall back to mock data
   const { data: apiData, isLoading } = useLicenses(1, 50, search, statusFilter);
-  const licenses: any[] = apiData?.licenses ?? MOCK_LICENSES;
+  const licenses: any[] = apiData?.licenses ?? [];
 
   const revokeMutation = useRevokeLicense();
+  const unrevokeMutation = useUnrevokeLicense();
   const renewMutation = useRenewLicense();
 
-  // Filter mock data client-side when API not available
-  const filtered = apiData
-    ? licenses
-    : licenses.filter((l) => {
-        const matchSearch =
-          !search ||
-          l.customerName.toLowerCase().includes(search.toLowerCase()) ||
-          l.domain.toLowerCase().includes(search.toLowerCase());
-        const matchStatus = !statusFilter || l.status === statusFilter;
-        const matchPlan = !planFilter || l.plan === planFilter;
-        return matchSearch && matchStatus && matchPlan;
-      });
+  const filtered = licenses.filter((l) => {
+    const matchSearch =
+      !search ||
+      l.customerName.toLowerCase().includes(search.toLowerCase()) ||
+      l.domain.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = !statusFilter || l.status === statusFilter;
+    const matchPlan = !planFilter || l.plan === planFilter;
+    return matchSearch && matchStatus && matchPlan;
+  });
 
   const activeCnt = licenses.filter((l) => l.status === "active").length;
   const expiringCnt = licenses.filter((l) => l.status === "expiring").length;
@@ -293,6 +167,11 @@ export function Licenses() {
     )
       return;
     revokeMutation.mutate(id);
+  };
+
+  const handleUnrevoke = (id: number) => {
+    if (!confirm("Unrevoke this license and reactivate it?")) return;
+    unrevokeMutation.mutate(id);
   };
 
   return (
@@ -559,6 +438,16 @@ export function Licenses() {
                                 Revoke
                               </Button>
                             )}
+                          {lic.status === "revoked" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleUnrevoke(lic.id)}
+                              isLoading={unrevokeMutation.isPending}
+                            >
+                              Unrevoke
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -776,6 +665,7 @@ function LicenseDetailModal({
 }) {
   const renewMutation  = useRenewLicense();
   const revokeMutation = useRevokeLicense();
+  const unrevokeMutation = useUnrevokeLicense();
   const managedMutation = useToggleManaged();
   const [noteInput, setNoteInput] = useState(lic.managedNote ?? "");
   const [localManaged, setLocalManaged]       = useState<boolean>(lic.isManaged ?? false);
@@ -980,6 +870,20 @@ function LicenseDetailModal({
             >
               <X className="w-3.5 h-3.5" />
               Revoke
+            </Button>
+          )}
+          {lic.status === "revoked" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (confirm("Unrevoke this license and reactivate it?"))
+                  unrevokeMutation.mutate(lic.id, { onSuccess: onClose });
+              }}
+              isLoading={unrevokeMutation.isPending}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Unrevoke
             </Button>
           )}
         </div>

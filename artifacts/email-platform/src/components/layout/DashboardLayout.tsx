@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Mail, LayoutDashboard, Users, CreditCard, Settings, LogOut, Menu, X, Shield, ClipboardList, UserRound, Globe } from "lucide-react";
+import { Mail, LayoutDashboard, Users, CreditCard, Settings, LogOut, Menu, X, Shield, ClipboardList, UserRound } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -19,7 +19,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const navigation = [
     { name: "Overview",      href: "/dashboard",           icon: LayoutDashboard },
     ...(user.role !== "admin" ? [
-      { name: "My Domains",   href: "/dashboard/domains",  icon: Globe },
       { name: "My Licenses",  href: "/dashboard/licenses", icon: Shield },
       { name: "My Billing",   href: "/dashboard/billing",  icon: CreditCard },
       { name: "My Account",   href: "/dashboard/account",  icon: UserRound },

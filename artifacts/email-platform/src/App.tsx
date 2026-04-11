@@ -18,12 +18,6 @@ import { Billing }    from "@/pages/dashboard/Billing";
 import { UserBilling } from "@/pages/dashboard/UserBilling";
 import { UserLicenses } from "@/pages/dashboard/UserLicenses";
 import { Account } from "@/pages/dashboard/Account";
-import { UserDomains } from "@/pages/dashboard/UserDomains";
-import { Privacy }    from "@/pages/legal/Privacy";
-import { Terms }      from "@/pages/legal/Terms";
-import { Refunds }    from "@/pages/legal/Refunds";
-import { Cookies }    from "@/pages/legal/Cookies";
-import { Legal }      from "@/pages/legal/Legal";
 import { useAuth }    from "@/hooks/use-auth";
 
 const Domains = UserDomains;
@@ -76,10 +70,6 @@ function Router() {
       <Route path="/dashboard/account">
         {() => <ProtectedRoute component={Account} />}
       </Route>
-      <Route path="/dashboard/domains">
-        {() => <ProtectedRoute component={Domains} />}
-      </Route>
-
       <Route path="/dashboard/admin/licenses">
         {() => <AdminRoute component={Licenses} />}
       </Route>

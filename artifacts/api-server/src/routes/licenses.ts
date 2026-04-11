@@ -202,6 +202,22 @@ router.post("/revoke/:id", requireAuth, async (req, res) => {
   }
 });
 
+// ── POST /api/licenses/unrevoke/:id ───────────────────────────────────────────
+router.post("/unrevoke/:id", requireAuth, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (user.role !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
+    const id = parseIdParam(req.params.id);
+    const [updated] = await db.update(licensesTable)
+      .set({ status: "active", revokedAt: null, updatedAt: new Date() })
+      .where(eq(licensesTable.id, id)).returning();
+    if (!updated) { res.status(404).json({ error: "Not Found" }); return; }
+    res.json({ message: "License unrevoked", license: formatLicense(updated) });
+  } catch (err) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 // ── POST /api/licenses/renew/:id ──────────────────────────────────────────────
 router.post("/renew/:id", requireAuth, async (req, res) => {
   try {

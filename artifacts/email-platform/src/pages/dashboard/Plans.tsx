@@ -147,6 +147,29 @@ export function Plans() {
               </table>
             </div>
           </Card>
+
+          {/* Delivery Add-ons */}
+          <div className="mt-10">
+            <h2 className="text-2xl font-display font-bold mb-2">Delivery & Infrastructure Add-ons</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Use your own SMTP or upgrade to managed delivery anytime.
+            </p>
+            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-5">
+              {data?.deliveryPlans?.map((plan) => (
+                <Card key={plan.id} className="border-border/50">
+                  <CardContent className="p-6">
+                    <h3 className="font-bold mb-1">{plan.name}</h3>
+                    <p className="text-2xl font-extrabold mb-3">{formatCurrency(plan.priceMonthly)}/mo</p>
+                    <p className="text-sm mb-1">
+                      {plan.emailsPerMonth > 0 ? `${formatNumber(plan.emailsPerMonth)} emails/month` : "Custom volume"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{plan.infrastructure}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{plan.routing}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
         </>
       )}
 

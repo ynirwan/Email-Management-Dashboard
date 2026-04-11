@@ -84,6 +84,15 @@ export function useRevokeLicense() {
   });
 }
 
+export function useUnrevokeLicense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      fetchApi(`/api/licenses/unrevoke/${id}`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/licenses"] }),
+  });
+}
+
 export function useRenewLicense() {
   const qc = useQueryClient();
   return useMutation({
