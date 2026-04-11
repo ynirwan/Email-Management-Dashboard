@@ -19,6 +19,11 @@ import { UserBilling } from "@/pages/dashboard/UserBilling";
 import { UserLicenses } from "@/pages/dashboard/UserLicenses";
 import { Account } from "@/pages/dashboard/Account";
 import { UserDomains } from "@/pages/dashboard/UserDomains";
+import { Privacy }    from "@/pages/legal/Privacy";
+import { Terms }      from "@/pages/legal/Terms";
+import { Refunds }    from "@/pages/legal/Refunds";
+import { Cookies }    from "@/pages/legal/Cookies";
+import { Legal }      from "@/pages/legal/Legal";
 import { useAuth }    from "@/hooks/use-auth";
 
 const Domains = UserDomains;
@@ -90,6 +95,12 @@ function Router() {
       <Route path="/dashboard/settings">
         {() => <AdminRoute component={Settings} />}
       </Route>
+
+      <Route path="/legal"          component={Legal} />
+      <Route path="/legal/privacy"  component={Privacy} />
+      <Route path="/legal/terms"    component={Terms} />
+      <Route path="/legal/refunds"  component={Refunds} />
+      <Route path="/legal/cookies"  component={Cookies} />
 
       <Route component={NotFound} />
     </Switch>

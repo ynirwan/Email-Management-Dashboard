@@ -73,9 +73,11 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div>
             <h4 className="text-white font-bold mb-4 font-display">Legal</h4>
             <ul className="space-y-3 text-sm">
-              <li><a href="#" className="hover:text-primary transition-colors">Privacy Policy</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Terms of Service</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Cookie Policy</a></li>
+              <li><a href="/legal/privacy" className="hover:text-primary transition-colors">Privacy Policy</a></li>
+              <li><a href="/legal/terms"   className="hover:text-primary transition-colors">Terms of Service</a></li>
+              <li><a href="/legal/refunds" className="hover:text-primary transition-colors">Refund Policy</a></li>
+              <li><a href="/legal/cookies" className="hover:text-primary transition-colors">Cookie Policy</a></li>
+              <li><a href="/legal"         className="hover:text-primary transition-colors">Legal</a></li>
             </ul>
           </div>
         </div>

@@ -125,16 +125,43 @@ export function Landing() {
 
   const licensePlans = [
     {
-      name: "Starter License", price: "$49", installs: "1 installation (server/domain)", support: "$29/year", popular: true,
-      features: ["1 installation (server/domain)","Multi-user shared workspace","Campaign management","All template editors","Subscriber management","Basic analytics","Suppression list","Custom sending domains","Community support"],
+      name: "Starter License", price: "$49", installs: "1 installation (server/domain)", popular: true,
+      features: ["1 installation (server/domain)","Multi-user shared workspace","Campaign management","All template editors","Subscriber management","Basic analytics","Suppression list","Custom sending domains","Lifetime software updates"],
     },
     {
-      name: "Pro License", price: "$149", installs: "Up to 3 installations", support: "$49/year", popular: false,
-      features: ["Everything in Starter","Automation workflows","A/B testing","Advanced segmentation","API access","Webhooks","Priority support"],
+      name: "Pro License", price: "$149", installs: "Up to 3 installations", popular: false,
+      features: ["Everything in Starter","Automation workflows","A/B testing","Advanced segmentation","API access","Webhooks","Lifetime software updates"],
     },
     {
-      name: "Agency License", price: "$299", installs: "Unlimited installations", support: "$99/year", popular: false,
-      features: ["Everything in Pro","White label","Client usage allowed","Audit logs","Team roles & permissions","Advanced reporting"],
+      name: "Agency License", price: "$299", installs: "Unlimited installations", popular: false,
+      features: ["Everything in Pro","White label","Client usage allowed","Audit logs","Team roles & permissions","Advanced reporting","Lifetime software updates"],
+    },
+  ];
+
+  const supportPlans = [
+    {
+      name: "Basic Support",
+      price: "$19",
+      period: "/month",
+      badge: null,
+      desc: "Best for beginners needing setup help",
+      features: ["Installation assistance","SMTP setup (SES, SendGrid, etc.)","DNS help (SPF, DKIM, DMARC)","Basic troubleshooting"],
+    },
+    {
+      name: "Advanced Support",
+      price: "$49",
+      period: "/month",
+      badge: "Most Popular",
+      desc: "Best for growing users with serious usage",
+      features: ["Everything in Basic","Deliverability troubleshooting","Performance tuning","Queue / worker debugging","Priority response"],
+    },
+    {
+      name: "Managed Setup",
+      price: "$49–$99",
+      period: " one-time",
+      badge: null,
+      desc: "Full setup done for you, once",
+      features: ["Full installation","SMTP + DNS configuration","Initial platform setup","Handover & walkthrough"],
     },
   ];
 
@@ -414,7 +441,7 @@ export function Landing() {
                     <p className="text-sm text-muted-foreground mb-2">one-time</p>
                     <div className="text-sm bg-muted/50 rounded-lg px-3 py-2 mb-5 space-y-1">
                       <p><span className="text-muted-foreground">Installations:</span> <strong>{plan.installs}</strong></p>
-                      <p><span className="text-muted-foreground">Updates + support:</span> <strong>{plan.support}/year</strong></p>
+                      <p className="text-primary/80 font-medium">Includes lifetime updates. Paid support available if needed.</p>
                     </div>
                     <ul className="space-y-2.5 flex-1 mb-7">
                       {plan.features.map((f) => (
@@ -434,10 +461,63 @@ export function Landing() {
             ))}
           </div>
 
-          {/* Upgrade hook */}
-          <motion.p {...fadeUp} className="text-center text-sm text-muted-foreground mt-10 max-w-xl mx-auto italic">
-            Most users start with their own SMTP and upgrade to managed delivery as they scale.
-          </motion.p>
+          {/* Disclaimer + upgrade hook */}
+          <motion.div {...fadeUp} className="mt-10 max-w-xl mx-auto text-center space-y-2">
+            <p className="text-sm font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg px-4 py-2">
+              Support is not included with the license. Paid support plans are available if you need assistance.
+            </p>
+            <p className="text-xs text-muted-foreground italic">
+              Most users start with their own SMTP and upgrade to managed delivery as they scale.
+            </p>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ── SUPPORT PLANS ── */}
+      <section id="support" className="py-24">
+        <div className="max-w-6xl mx-auto px-4">
+          <motion.div {...fadeUp} className="text-center mb-12">
+            <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider mb-4 border border-primary/20">
+              Support
+            </span>
+            <h2 className="text-3xl md:text-4xl font-display font-bold mb-3">Need help setting things up?</h2>
+            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+              ZeniPost is self-hosted. If you need help with setup, configuration, or troubleshooting, choose a support plan.
+            </p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-3 gap-6 items-start">
+            {supportPlans.map((plan, i) => (
+              <motion.div key={plan.name} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }}>
+                <Card className={cn("relative overflow-hidden h-full", plan.badge ? "border-primary shadow-xl scale-[1.02]" : "hover:border-primary/30 transition-colors")}>
+                  {plan.badge && <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary to-blue-500" />}
+                  {plan.badge && (
+                    <div className="absolute top-4 right-4">
+                      <span className="text-xs font-bold bg-primary/10 text-primary px-3 py-1 rounded-full">{plan.badge}</span>
+                    </div>
+                  )}
+                  <CardContent className="p-8 flex flex-col h-full">
+                    <h3 className="text-xl font-bold mb-1">{plan.name}</h3>
+                    <p className="text-xs text-muted-foreground mb-4">{plan.desc}</p>
+                    <div className="mb-5">
+                      <span className="text-4xl font-extrabold">{plan.price}</span>
+                      <span className="text-muted-foreground text-sm">{plan.period}</span>
+                    </div>
+                    <ul className="space-y-2.5 flex-1 mb-7">
+                      {plan.features.map((f) => (
+                        <li key={f} className="flex items-start gap-2 text-sm">
+                          <CheckCircle2 className="w-4 h-4 text-primary/60 flex-shrink-0 mt-0.5" />{f}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button variant={plan.badge ? "default" : "outline"} className="w-full">
+                      Get {plan.name}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -519,9 +599,10 @@ export function Landing() {
               <br className="hidden sm:block" />
               <span className="text-primary">or let us handle your entire email infrastructure.</span>
             </h2>
-            <p className="text-xl text-background/70 mb-10">
-              Buy once, host anywhere. Your data, your server, your rules.
+            <p className="text-xl text-background/70 mb-3">
+              Buy once. Get lifetime updates. Pay only if you need help or delivery.
             </p>
+            <p className="text-sm text-background/50 mb-10">Your data. Your server. Your rules.</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/register">
                 <Button size="lg" className="bg-white text-foreground hover:bg-white/90 text-base px-8 h-12 w-full sm:w-auto">
