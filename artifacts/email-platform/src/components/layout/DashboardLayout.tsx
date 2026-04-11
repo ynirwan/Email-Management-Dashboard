@@ -35,10 +35,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex bg-muted/30">
+      {/* Mobile sidebar overlay */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setMobileMenuOpen(false)} />
       )}
 
+      {/* Sidebar */}
       <aside className={cn(
         "fixed inset-y-0 left-0 z-50 w-72 bg-sidebar text-sidebar-foreground transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:block flex flex-col shadow-2xl lg:shadow-none border-r border-sidebar-border",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
@@ -95,6 +97,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
+      {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-20 bg-background/80 backdrop-blur-md border-b border-border/50 flex items-center px-4 sm:px-8 lg:hidden sticky top-0 z-30">
           <button onClick={() => setMobileMenuOpen(true)} className="p-2 -ml-2 rounded-lg text-foreground/70 hover:bg-accent/10">

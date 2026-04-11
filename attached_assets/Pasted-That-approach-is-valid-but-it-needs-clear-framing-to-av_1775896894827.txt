@@ -1,0 +1,154 @@
+That approach is valid, but it needs clear framing to avoid confusion and support abuse.
+Below is the clean, production-ready structure for your decision.
+
+✅ FINAL MODEL (NO YEARLY UPDATES)
+You will have:
+
+
+✅ One-time license
+
+
+❌ No paid “updates plan”
+
+
+✅ Paid support (monthly or one-time)
+
+
+✅ Paid delivery (main revenue)
+
+
+
+⚠️ CRITICAL RULE (must communicate clearly)
+You are now saying:
+
+Software updates are included, but assistance is paid.
+
+If not stated clearly → users expect free lifetime support
+
+🧾 UPDATED LICENSE SECTION
+Replace this line:
+❌
+“Support + Updates: $29/year”
+
+With:
+Includes lifetime updates. Paid support available if needed.
+
+🧩 SUPPORT PLANS (ONLY SERVICE YOU SELL)
+
+🔹 Basic Support — $19/month
+Best for:
+Beginners / setup help
+Includes:
+
+
+Installation assistance
+
+
+SMTP setup (SES, SendGrid, etc.)
+
+
+DNS help (SPF, DKIM, DMARC)
+
+
+Basic troubleshooting
+
+
+
+🔹 Advanced Support — $49/month
+Best for:
+Growing users / serious usage
+Includes:
+
+
+Everything in Basic
+
+
+Deliverability troubleshooting
+
+
+Performance tuning
+
+
+Queue / worker debugging
+
+
+Priority response
+
+
+
+🔹 Managed Setup — $49–$99 (one-time)
+Includes:
+
+
+Full installation
+
+
+SMTP + DNS setup
+
+
+Initial configuration
+
+
+
+🧩 UI SECTION (ADD THIS)
+Title:
+Need help setting things up?
+
+Description:
+ZeniPost is self-hosted. If you need help with setup, configuration, or troubleshooting, choose a support plan.
+
+⚠️ VERY IMPORTANT DISCLAIMERS
+Add this near pricing:
+Support is not included with the license. Paid support plans are available if you need assistance.
+
+🧠 WHY THIS MODEL WORKS
+✔ Lower friction to buy
+
+
+No recurring commitment
+
+
+Simple: pay once
+
+
+
+✔ You avoid support overload
+
+
+Only paying users get help
+
+
+
+✔ Revenue still strong
+
+
+Support (monthly)
+
+
+Delivery (main recurring)
+
+
+
+⚠️ RISK (and how to handle it)
+Risk:
+User says:
+
+“I paid once, help me fix this”
+
+
+Solution:
+Be explicit everywhere:
+
+
+Docs
+
+
+Pricing page
+
+
+Checkout
+
+
+
+🎯 FINAL POSITIONING LINE
+Buy once. Get lifetime updates. Pay only if you need help or delivery.
