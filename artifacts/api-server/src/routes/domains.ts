@@ -7,6 +7,11 @@ import crypto from "crypto";
 
 const router = Router();
 
+function parseIdParam(value: string | string[]): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return parseInt(raw, 10);
+}
+
 const LICENSE_SECRET = process.env["LICENSE_SECRET"] || "zenipost-license-secret-key";
 
 function generateLicenseKey(): string {
@@ -111,7 +116,7 @@ router.post("/", requireAuth, async (req, res) => {
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req.params.id);
 
     const domains = await db.select().from(domainsTable).where(eq(domainsTable.id, id)).limit(1);
     const domain = domains[0];
@@ -137,7 +142,7 @@ router.delete("/:id", requireAuth, async (req, res) => {
 router.post("/:id/license", requireAuth, async (req, res) => {
   try {
     const user = (req as any).user;
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req.params.id);
 
     const domains = await db.select().from(domainsTable).where(eq(domainsTable.id, id)).limit(1);
     const domain = domains[0];
@@ -186,7 +191,7 @@ router.patch("/:id/verify", requireAuth, async (req, res) => {
       res.status(403).json({ error: "Forbidden", message: "Admin only" });
       return;
     }
-    const id = parseInt(req.params.id);
+    const id = parseIdParam(req.params.id);
     const [updated] = await db.update(domainsTable).set({ isVerified: true }).where(eq(domainsTable.id, id)).returning();
     if (!updated) {
       res.status(404).json({ error: "Not Found", message: "Domain not found" });
