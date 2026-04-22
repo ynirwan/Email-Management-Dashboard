@@ -1,5 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchApi } from "@/lib/api";
+import React, { useState } from "react";
+import { Modal } from "@/components/ui/modal";
+import { Button, Input } from "@/components/ui/core";
+import { Label } from "@/components/ui/label";
+import { Truck, CheckCircle2, X } from "lucide-react";
 
 export type LicenseStatus = "active" | "expiring" | "revoked" | "expired";
 export type LicensePlan   = "starter" | "pro" | "agency";
@@ -38,6 +43,13 @@ export interface GenerateLicensePayload {
   features: string[];
   expiresAt: string;
 }
+
+const DELIVERY_PLAN_OPTIONS = [
+  { id: "delivery_starter",   name: "Starter Delivery",  price: "$35/mo",  volume: "55k emails/mo",  infra: "Shared IP pool" },
+  { id: "delivery_growth",    name: "Growth Delivery",   price: "$87/mo",  volume: "150k emails/mo", infra: "Optimized routing + IP warmup" },
+  { id: "delivery_scale",     name: "Scale Delivery",    price: "$159/mo", volume: "350k emails/mo", infra: "Priority queue + IP warmup" },
+  { id: "delivery_dedicated", name: "Dedicated IP",      price: "$299+/mo",volume: "Custom volume",  infra: "Dedicated IP + warmup + reputation mgmt" },
+];
 
 export function useLicenses(page = 1, limit = 50, search = "", status = "") {
   const params = new URLSearchParams({
@@ -104,6 +116,8 @@ export function useRenewLicense() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/licenses"] }),
   });
 }
+
+
 
 export const FEATURE_LABELS: Record<string, string> = {
   ab_testing:             "A/B Testing",

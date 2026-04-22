@@ -47,45 +47,73 @@ const PLAN_DEFAULTS: Record<string, { emails: number; subs: number }> = {
 };
 
 const ALL_FEATURES = [
-  "ab_testing",
-  "automation",
-  "segmentation",
-  "analytics_advanced",
+  "campaign_management",
+  "template_editors",
+  "subscriber_management",
+  "analytics_basic",
+  "suppression_list",
   "custom_domains",
-  "suppression_management",
+  "webhooks",
+  "automation",
+  "ab_testing",
+  "segmentation_advanced",
   "api_access",
+  "analytics_advanced",
   "gdpr_tools",
-  "audit_trail",
   "white_label",
+  "client_usage",
+  "audit_logs",
+  "team_roles",
 ];
 
-const FEATURE_LABELS: Record<string, string> = {
-  ab_testing: "A/B Testing",
-  automation: "Automation",
-  segmentation: "Segmentation",
-  analytics_advanced: "Analytics Pro",
-  custom_domains: "Custom Domains",
-  suppression_management: "Suppression Mgmt",
-  api_access: "API Access",
-  gdpr_tools: "GDPR Tools",
-  audit_trail: "Audit Trail",
-  white_label: "White Label",
+export const FEATURE_LABELS: Record<string, string> = {
+  campaign_management:   "Campaign Management",
+  template_editors:      "Template Editors",
+  subscriber_management: "Subscriber Management",
+  analytics_basic:       "Basic Analytics",
+  suppression_list:      "Suppression List",
+  custom_domains:        "Custom Sending Domains",
+  webhooks:              "Webhooks",
+  automation:            "Automation Workflows",
+  ab_testing:            "A/B Testing",
+  segmentation_advanced: "Advanced Segmentation",
+  api_access:            "API Access",
+  analytics_advanced:    "Advanced Reporting",
+  gdpr_tools:            "GDPR Tools",
+  white_label:           "White Label",
+  client_usage:          "Client Usage Allowed",
+  audit_logs:            "Audit Logs",
+  team_roles:            "Team Roles & Permissions",
+  // Delivery flags (display only — not in manual picker)
+  managed_delivery:      "Managed Delivery",
+  dedicated_ip:          "Dedicated IP",
+  ip_warmup:             "IP Warmup",
 };
 
-const PLAN_DEFAULT_FEATURES: Record<string, string[]> = {
-  starter: ["analytics_advanced", "suppression_management"],
-  pro: [
-    "ab_testing",
-    "automation",
-    "segmentation",
-    "analytics_advanced",
-    "custom_domains",
-    "suppression_management",
-    "api_access",
-    "gdpr_tools",
-    "audit_trail",
+export const PLAN_DEFAULT_FEATURES: Record<string, string[]> = {
+  starter: [
+    "campaign_management", "template_editors", "subscriber_management",
+    "analytics_basic", "suppression_list", "custom_domains", "webhooks",
   ],
-  agency: [...ALL_FEATURES],
+  pro: [
+    "campaign_management", "template_editors", "subscriber_management",
+    "analytics_basic", "suppression_list", "custom_domains", "webhooks",
+    "automation", "ab_testing", "segmentation_advanced", "api_access",
+    "analytics_advanced", "gdpr_tools",
+  ],
+  agency: [
+    "campaign_management", "template_editors", "subscriber_management",
+    "analytics_basic", "suppression_list", "custom_domains", "webhooks",
+    "automation", "ab_testing", "segmentation_advanced", "api_access",
+    "analytics_advanced", "gdpr_tools",
+    "white_label", "client_usage", "audit_logs", "team_roles",
+  ],
+};
+
+export const PLAN_DEFAULTS: Record<string, { emails: number; subs: number }> = {
+  starter: { emails: 100000,  subs: 25000  },
+  pro:     { emails: 500000,  subs: 100000 },
+  agency:  { emails: 1000000, subs: 250000 },
 };
 
 function statusBadge(status: string) {

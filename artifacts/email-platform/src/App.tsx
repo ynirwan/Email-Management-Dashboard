@@ -24,6 +24,8 @@ import { Refunds }    from "@/pages/legal/Refunds";
 import { Cookies }    from "@/pages/legal/Cookies";
 import { Legal }      from "@/pages/legal/Legal";
 import { useAuth } from "@/hooks/use-auth";
+import { UsageEnforcement } from "@/pages/dashboard/UsageEnforcement";
+import { Domains }          from "@/pages/dashboard/Domains";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -112,6 +114,16 @@ function Router() {
       <Route path="/legal/cookies"  component={Cookies} />
 
       <Route component={NotFound} />
+
+      <Route path="/dashboard/admin/usage">
+        {() => <AdminRoute component={UsageEnforcement} />}
+      </Route>
+
+      // User: Domains page
+      <Route path="/dashboard/domains">
+        {() => <ProtectedRoute component={Domains} />}
+      </Route>
+      
     </Switch>
   );
 }
