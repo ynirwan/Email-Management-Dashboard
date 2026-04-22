@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { Card, CardContent, Button, Input, Spinner } from "@/components/ui/core";
+import {
+  Card,
+  CardContent,
+  Button,
+  Input,
+  Spinner,
+} from "@/components/ui/core";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchApi } from "@/lib/api";
@@ -220,17 +226,17 @@ function DomainCard({
                 days <= 0
                   ? "text-destructive"
                   : days <= 30
-                  ? "text-amber-600"
-                  : "text-foreground"
+                    ? "text-amber-600"
+                    : "text-foreground"
               }`}
             >
               {days <= 0
                 ? "Expired"
                 : days <= 30
-                ? `${days}d left`
-                : formatDistanceToNow(parseISO(domain.expiresAt), {
-                    addSuffix: true,
-                  })}
+                  ? `${days}d left`
+                  : formatDistanceToNow(parseISO(domain.expiresAt), {
+                      addSuffix: true,
+                    })}
             </p>
           </div>
           <div>
@@ -278,7 +284,7 @@ function AddDomainModal({
     .toLowerCase()
     .trim();
   const isValid = /^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?(\.[a-z]{2,})+$/.test(
-    clean
+    clean,
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -299,9 +305,9 @@ function AddDomainModal({
           <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>
             Enter just the domain without <code>https://</code>, e.g.{" "}
-            <code>mail.yourcompany.com</code> or{" "}
-            <code>app.yourserver.io</code>. After adding, download the license
-            file to activate your installation.
+            <code>mail.yourcompany.com</code> or <code>app.yourserver.io</code>.
+            After adding, download the license file to activate your
+            installation.
           </span>
         </div>
 
@@ -409,15 +415,26 @@ export function Domains() {
   // Add domain
   const addMutation = useMutation({
     mutationFn: (domain: string) =>
-      fetchApi("/api/domains", { method: "POST", body: JSON.stringify({ domain }) }),
+      fetchApi("/api/domains", {
+        method: "POST",
+        body: JSON.stringify({ domain }),
+      }),
     onSuccess: () => {
-      toast({ title: "Domain added", description: "Your domain has been registered. Download the license to activate it." });
+      toast({
+        title: "Domain added",
+        description:
+          "Your domain has been registered. Download the license to activate it.",
+      });
       qc.invalidateQueries({ queryKey: ["/api/domains"] });
       qc.invalidateQueries({ queryKey: ["/api/portal"] });
       setShowAdd(false);
     },
     onError: (err: any) => {
-      toast({ title: "Error", description: err.message ?? "Failed to add domain", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: err.message ?? "Failed to add domain",
+        variant: "destructive",
+      });
     },
   });
 
@@ -432,7 +449,11 @@ export function Domains() {
       setDeletingDomain(null);
     },
     onError: (err: any) => {
-      toast({ title: "Error", description: err.message ?? "Failed to delete domain", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: err.message ?? "Failed to delete domain",
+        variant: "destructive",
+      });
     },
   });
 
@@ -451,9 +472,16 @@ export function Domains() {
       a.download = `zenipost-license-${domainObj?.domain ?? domainId}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast({ title: "License downloaded", description: "Place this file in your ZeniPost installation directory." });
+      toast({
+        title: "License downloaded",
+        description: "Place this file in your ZeniPost installation directory.",
+      });
     } catch (err: any) {
-      toast({ title: "Download failed", description: err.message ?? "Try again", variant: "destructive" });
+      toast({
+        title: "Download failed",
+        description: err.message ?? "Try again",
+        variant: "destructive",
+      });
     } finally {
       setDownloadingId(null);
     }
