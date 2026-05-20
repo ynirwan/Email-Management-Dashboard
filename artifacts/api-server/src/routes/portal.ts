@@ -1,16 +1,10 @@
-// artifacts/api-server/src/routes/portal.ts  (FULL REPLACEMENT)
+// artifacts/api-server/src/routes/portal.ts
 //
-// Fixes applied:
-//   Fix #4: admin_access_allowed now included in user license download
-//   Fix #5: snake_case field names in license file
-//   New:    delivery block included when delivery plan is active
-//   Note:   This route now delegates license file building to the shared
-//           buildLicensePayload() helper (imported from licenses.ts) to
-//           guarantee both admin and user downloads are always identical.
+// Customer-facing portal: dashboard snapshot + license file download.
 //
-// ⚠️  The domains.ts /api/domains/:id/license route (v1 format) is REMOVED.
-//     All license downloads go through here (/api/portal/license/:id/download)
-//     or through /api/licenses/:id/download (admin).
+// License file generation delegates to the shared buildLicensePayload() in
+// lib/license-builder.ts — the single source of truth for the v2 JWT schema.
+// Admin downloads go through /api/licenses/:id/download (licenses.ts).
 
 import { Router } from "express";
 import { db, licensesTable, usersTable, domainsTable } from "@workspace/db";
@@ -18,11 +12,11 @@ import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
 import { PLAN_DEFINITIONS } from "./plans.js";
+import { buildLicensePayload } from "../lib/license-builder.js";
 
 const router = Router();
 
 const LICENSE_SECRET = process.env["LICENSE_SECRET"] || "zenipost-license-secret-2026";
-const APP_URL        = process.env["APP_URL"]        || "https://app.zenipost.com";
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -40,46 +34,7 @@ function toISO(v: any): string {
   return v instanceof Date ? v.toISOString() : String(v);
 }
 
-// ── Canonical license file builder — identical to the one in licenses.ts ──────
-// Kept in sync manually. If you change the schema here, change it in licenses.ts too.
-// (In a real monorepo you'd extract this to a shared lib package.)
-function buildLicensePayload(lic: any, owner: any): object {
-  const features = parseFeatures(lic.features);
-
-  const delivery = lic.deliveryPlanId
-    ? {
-        plan_id:      lic.deliveryPlanId,
-        plan_name:    lic.deliveryPlanName   ?? null,
-        emails_limit: lic.deliveryEmailsLimit ?? null,
-        infra:        lic.deliveryInfra       ?? null,
-        routing:      lic.deliveryRouting     ?? null,
-        active_since: lic.deliveryActiveSince ? toISO(lic.deliveryActiveSince) : null,
-        dedicated_ip: features.includes("dedicated_ip"),
-        ip_warmup:    features.includes("ip_warmup"),
-      }
-    : null;
-
-  return {
-    license_id:           `lic_${lic.id}`,
-    domain:               lic.domain,
-    root_domain:          lic.rootDomain ?? "",
-    customer_id:          lic.customerId,
-    customer_name:        owner?.company ?? owner?.name ?? "Unknown",
-    customer_email:       owner?.email ?? "",
-    plan:                 lic.plan,
-    emails_per_month:     lic.emailsPerMonth,
-    subscribers_limit:    lic.subscribersLimit,
-    features,
-    issued_at:            toISO(lic.issuedAt),
-    expires_at:           toISO(lic.expiresAt),
-    product:              "ZeniPost Email Platform",
-    version:              "2.0",
-    format:               "zenipost-license-v2",
-    ping_url:             `${APP_URL}/api/licenses/ping`,
-    admin_access_allowed: (lic.isManaged ?? false) && (lic.adminAccessEnabled ?? false),  // Fix #4
-    delivery,
-  };
-}
+// buildLicensePayload is imported from ../lib/license-builder.ts — single source of truth.
 
 // ── GET /api/portal — user dashboard snapshot ─────────────────────────────────
 router.get("/", requireAuth, async (req, res) => {
@@ -189,6 +144,18 @@ router.get("/license/:id/download", requireAuth, async (req, res) => {
     // Only allow the owner or admin to download
     if (lic.customerId !== user.id && user.role !== "admin") {
       res.status(403).json({ error: "Forbidden", message: "Not your license" }); return;
+    }
+
+    // Block download of a revoked license — revokedAt is set by admin via PATCH /licenses/:id/revoke.
+    // The running email-app detects revocation via ping, but a re-download of the JWT file would
+    // bypass that mechanism and produce a self-contained valid credential.
+    if (lic.revokedAt) {
+      res.status(403).json({
+        error:   "Forbidden",
+        message: "This license has been revoked and cannot be downloaded. Contact support if you believe this is an error.",
+        code:    "LICENSE_REVOKED",
+      });
+      return;
     }
 
     const ownerRows = await db.select().from(usersTable).where(eq(usersTable.id, lic.customerId)).limit(1);

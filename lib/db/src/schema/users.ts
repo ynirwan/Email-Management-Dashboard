@@ -6,6 +6,7 @@ import {
   boolean,
   timestamp,
   pgEnum,
+  uuid,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -27,6 +28,16 @@ export const usersTable = pgTable("users", {
   subscribersUsed: integer("subscribers_used").notNull().default(0),
   subscribersLimit: integer("subscribers_limit").notNull().default(500),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+
+  // Password reset — token is a UUID stored as plain text (not hashed; it is
+  // single-use and expires quickly, so the risk of DB exposure is low).
+  // Both columns are nullable: only populated while a reset is pending.
+  resetToken:          text("reset_token"),
+  resetTokenExpiresAt: timestamp("reset_token_expires_at"),
+
+  // Email verification — populated after registration, cleared once verified.
+  emailVerifiedAt:        timestamp("email_verified_at"),
+  emailVerificationToken: text("email_verification_token"),
 });
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({

@@ -4,7 +4,17 @@ import { Request, Response, NextFunction } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
-const JWT_SECRET = process.env["JWT_SECRET"] || "zenipost-secret-key-change-in-production";
+// Fail fast at startup — an insecure or absent secret is a critical misconfiguration.
+// Set JWT_SECRET to a random string of at least 32 characters in your .env file.
+const _rawSecret = process.env["JWT_SECRET"];
+if (!_rawSecret || _rawSecret.length < 32) {
+  throw new Error(
+    "[FATAL] JWT_SECRET env var is missing or too short (< 32 chars). " +
+    "Generate one with: node -e \"console.log(require('crypto').randomBytes(48).toString('hex'))\" " +
+    "and set it in your .env file before starting the server."
+  );
+}
+const JWT_SECRET = _rawSecret;
 const JWT_EXPIRES_IN = "7d";
 
 export function hashPassword(password: string): string {
@@ -42,12 +52,23 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 
   const users = await db.select().from(usersTable).where(eq(usersTable.id, payload.userId)).limit(1);
-  if (!users[0] || !users[0].isActive) {
-    res.status(401).json({ error: "Unauthorized", message: "User not found or inactive" });
+  const user  = users[0];
+
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized", message: "User not found" });
     return;
   }
 
-  (req as any).user = users[0];
+  if (!user.isActive) {
+    // Distinguish between "not yet verified" and "admin-deactivated"
+    const reason = (user as any).emailVerifiedAt === null || (user as any).emailVerifiedAt === undefined
+      ? "Email address not verified. Please check your inbox for a verification link."
+      : "Account is deactivated. Please contact support.";
+    res.status(401).json({ error: "Unauthorized", message: reason, code: "ACCOUNT_INACTIVE" });
+    return;
+  }
+
+  (req as any).user = user;
   next();
 }
 

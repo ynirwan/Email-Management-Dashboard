@@ -15,12 +15,14 @@ import { eq, ilike, or, and, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
 import { PLAN_FEATURE_FLAGS, FEATURE_LABELS } from "@workspace/db/schema/feature-flags.js";
+import { PLAN_DEFINITIONS } from "./plans.js";
+import { buildLicensePayload } from "../lib/license-builder.js";
 
 const router = Router();
 
 const LICENSE_SECRET      = process.env["LICENSE_SECRET"]      || "zenipost-license-secret-2026";
 const ADMIN_ACCESS_SECRET = process.env["ADMIN_ACCESS_SECRET"] || "zenipost-admin-access-secret-2026";
-const APP_URL             = process.env["APP_URL"]             || "https://app.zenipost.com";
+// APP_URL is consumed inside lib/license-builder.ts — not needed here.
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,73 +50,7 @@ function toISO(v: any): string {
   return v instanceof Date ? v.toISOString() : String(v);
 }
 
-// ── Canonical license payload builder ────────────────────────────────────────
-// ALL license file generation goes through this single function.
-// This is the schema the email app reads. Change here, change nowhere else.
-//
-// Fields the email app reads:
-//   license_id          — identifies this license back to the dashboard
-//   domain              — must match APP_DOMAIN env in email app
-//   root_domain         — used for subdomain matching
-//   customer_id / name / email — for display / logging in email app
-//   plan                — gates feature visibility in email app UI
-//   emails_per_month    — quota limit (snake_case, enforced by email app)
-//   subscribers_limit   — quota limit (snake_case, enforced by email app)
-//   features            — string[] of FeatureFlag values — gates functionality
-//   issued_at           — ISO string
-//   expires_at          — ISO string — email app checks daily, blocks on expiry
-//   product / version   — sanity-check on startup
-//   ping_url            — where email app pings to confirm license validity
-//   admin_access_allowed — if true, email app registers /auth/admin-access route
-//   delivery            — null if self-managed, object if on ZeniPost delivery
-//     delivery.plan_id      — delivery tier id
-//     delivery.plan_name    — human name
-//     delivery.emails_limit — monthly send ceiling on this delivery tier
-//     delivery.infra        — e.g. "Optimized routing"
-//     delivery.routing      — e.g. "Better inbox placement"
-//     delivery.active_since — ISO string
-//     delivery.dedicated_ip — bool — email app enables dedicated IP path
-//     delivery.ip_warmup    — bool — email app activates warmup throttle
-// ─────────────────────────────────────────────────────────────────────────────
-function buildLicensePayload(lic: any, owner: any): object {
-  const features = parseFeatures(lic.features);
-
-  // Delivery block — only present when a managed delivery plan is assigned
-  const delivery = lic.deliveryPlanId
-    ? {
-        plan_id:      lic.deliveryPlanId,
-        plan_name:    lic.deliveryPlanName   ?? null,
-        emails_limit: lic.deliveryEmailsLimit ?? null,
-        infra:        lic.deliveryInfra       ?? null,
-        routing:      lic.deliveryRouting     ?? null,
-        active_since: lic.deliveryActiveSince ? toISO(lic.deliveryActiveSince) : null,
-        // These two flags tell the email app which sending path to activate
-        dedicated_ip: features.includes("dedicated_ip"),
-        ip_warmup:    features.includes("ip_warmup"),
-      }
-    : null;
-
-  return {
-    license_id:           `lic_${lic.id}`,         // Fix #1: real id, never "pending"
-    domain:               lic.domain,
-    root_domain:          lic.rootDomain ?? "",
-    customer_id:          lic.customerId,
-    customer_name:        owner?.company ?? owner?.name ?? "Unknown",
-    customer_email:       owner?.email ?? "",
-    plan:                 lic.plan,
-    emails_per_month:     lic.emailsPerMonth,       // Fix #5: snake_case throughout
-    subscribers_limit:    lic.subscribersLimit,
-    features,                                       // Fix #3: canonical flags
-    issued_at:            toISO(lic.issuedAt),
-    expires_at:           toISO(lic.expiresAt),
-    product:              "ZeniPost Email Platform",
-    version:              "2.0",
-    format:               "zenipost-license-v2",   // Fix #1: single format, v1 gone
-    ping_url:             `${APP_URL}/api/licenses/ping`,
-    admin_access_allowed: (lic.isManaged ?? false) && (lic.adminAccessEnabled ?? false),  // Fix #4
-    delivery,                                       // New: managed delivery block
-  };
-}
+// buildLicensePayload is imported from ../lib/license-builder.ts — single source of truth.
 
 function signPayload(payload: object): string {
   return jwt.sign(payload, LICENSE_SECRET, { algorithm: "HS256" });
@@ -212,7 +148,7 @@ router.post("/", requireAdmin, async (req, res) => {
     }
 
     const cleanDomain = domain.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").toLowerCase().trim();
-    const rootDomain  = cleanDomain.split(".").slice(-2).join(".");
+    const rootDomain  = computeRootDomain(cleanDomain);
 
     const existing = await db.select().from(licensesTable).where(eq(licensesTable.domain, cleanDomain)).limit(1);
     if (existing[0]) {
@@ -229,13 +165,23 @@ router.post("/", requireAdmin, async (req, res) => {
       ? features
       : (PLAN_FEATURE_FLAGS[plan] ?? PLAN_FEATURE_FLAGS.starter);
 
+    // Default numeric limits to the plan definition values when caller omits them.
+    // This prevents under-provisioned licenses being issued silently.
+    const planLimits = PLAN_DEFINITIONS.find((p) => p.id === plan);
+    const resolvedEmailsPerMonth   = emailsPerMonth !== undefined && emailsPerMonth !== ""
+      ? parseInt(emailsPerMonth)
+      : (planLimits?.emailsPerMonth   ?? 100000);
+    const resolvedSubscribersLimit = subscribersLimit !== undefined && subscribersLimit !== ""
+      ? parseInt(subscribersLimit)
+      : (planLimits?.subscribersLimit ?? 25000);
+
     const payload = {
       customerId:       parseInt(customerId),
       domain:           cleanDomain,
       rootDomain,
       plan,
-      emailsPerMonth:   parseInt(emailsPerMonth) || 2500,
-      subscribersLimit: parseInt(subscribersLimit) || 500,
+      emailsPerMonth:   resolvedEmailsPerMonth,
+      subscribersLimit: resolvedSubscribersLimit,
       features:         JSON.stringify(resolvedFeatures),
       status:           "active" as const,
       expiresAt:        new Date(expiresAt),
@@ -568,12 +514,42 @@ router.post("/register-install", async (req, res) => {
     const rows = await db.select().from(licensesTable).where(eq(licensesTable.domain, cleanDomain)).limit(1);
     let lic = rows[0];
     if (!lic && cleanDomain.split(".").length > 2) {
-      const root = cleanDomain.split(".").slice(-2).join(".");
+      const root = computeRootDomain(cleanDomain);
       const rootRows = await db.select().from(licensesTable).where(eq(licensesTable.rootDomain, root)).limit(1);
       lic = rootRows[0];
     }
     if (!lic) {
       res.status(404).json({ ok: false, message: "No license found for this domain" }); return;
+    }
+
+    // Reject installs for revoked licenses — even if the JWT signature is valid, a revoked
+    // license must not be permitted to register new installations.
+    if (lic.revokedAt) {
+      res.status(403).json({
+        ok:      false,
+        message: "This license has been revoked and cannot be used to register an installation. Contact support.",
+        code:    "LICENSE_REVOKED",
+      });
+      return;
+    }
+
+    // Enforce per-plan installation seat limit.
+    // Starter = 1 install, Pro = 3, Agency = unlimited (9 999 999).
+    const planDef = PLAN_DEFINITIONS.find((p) => p.id === lic.plan);
+    const seatLimit = planDef?.installations ?? 1;
+    const usedSeats = lic.installCount ?? 0;
+    // Allow re-registration from the exact same IP (e.g. server restart / re-run of setup wizard)
+    const isSameIpReInstall = !!lic.installedIp && lic.installedIp === clientIp;
+    if (!isSameIpReInstall && usedSeats >= seatLimit) {
+      res.status(403).json({
+        ok:        false,
+        message:   `Installation limit reached: your '${lic.plan}' license allows ${seatLimit} installation${seatLimit === 1 ? "" : "s"} and you have already used ${usedSeats}. Please upgrade your license via the ZeniPost Dashboard.`,
+        code:      "INSTALL_LIMIT_REACHED",
+        used:      usedSeats,
+        limit:     seatLimit,
+        plan:      lic.plan,
+      });
+      return;
     }
 
     const isFirstInstall = !lic.installedAt;
@@ -611,6 +587,96 @@ router.post("/register-install", async (req, res) => {
     res.status(500).json({ ok: false, message: "Internal server error" });
   }
 });
+
+// ── Helpers — domain parsing ──────────────────────────────────────────────────
+
+/**
+ * computeRootDomain(domain) — public-suffix-aware root domain extraction.
+ *
+ * Handles the three problem cases the naive slice(-2) approach breaks on:
+ *   1. IPs           — returned verbatim     (e.g. "203.0.113.5")
+ *   2. localhost      — returned as-is
+ *   3. ccTLDs         — three-part root       (e.g. "user.co.uk" → "user.co.uk",
+ *                                               "app.user.co.uk" → "user.co.uk")
+ *
+ * For ordinary domains two-label extraction is used ("example.com").
+ *
+ * This covers the overwhelming majority of real-world cases without pulling in
+ * an external public-suffix-list library. If you need exotic ccTLDs, install
+ * "tldts" and replace this function body with tldts.getDomain().
+ */
+function computeRootDomain(rawDomain: string): string {
+  const domain = rawDomain.toLowerCase().trim();
+
+  // IPv4
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(domain)) return domain;
+  // IPv6 (bracket form or bare)
+  if (domain.startsWith("[") || domain.includes(":")) return domain;
+  // localhost or single-label
+  if (!domain.includes(".")) return domain;
+
+  const labels = domain.split(".");
+  const tld    = labels[labels.length - 1];   // e.g. "uk", "com", "io"
+  const sld    = labels[labels.length - 2];   // e.g. "co", "com", "example"
+
+  // Known second-level registries under a ccTLD — these require 3 labels to
+  // identify the registrant, e.g. "example.co.uk" not "co.uk".
+  // Sourced from the most common public entries in the Mozilla Public Suffix List.
+  const KNOWN_SLD_UNDER_CCTLD = new Set([
+    // United Kingdom
+    "co.uk","org.uk","me.uk","net.uk","ltd.uk","plc.uk","gov.uk","sch.uk","ac.uk","police.uk",
+    // Australia
+    "com.au","org.au","net.au","edu.au","gov.au","asn.au","id.au",
+    // New Zealand
+    "co.nz","org.nz","net.nz","school.nz","govt.nz","ac.nz","geek.nz",
+    // South Africa
+    "co.za","org.za","net.za","gov.za","edu.za","ac.za",
+    // India
+    "co.in","org.in","net.in","gen.in","ind.in","gov.in","nic.in","ac.in","edu.in",
+    // Japan
+    "co.jp","or.jp","ne.jp","gr.jp","ac.jp","ad.jp","ed.jp","go.jp","lg.jp",
+    // Brazil
+    "com.br","org.br","net.br","gov.br","edu.br","mil.br","adv.br","arq.br","eng.br",
+    // China
+    "com.cn","org.cn","net.cn","gov.cn","edu.cn","ac.cn",
+    // Hong Kong
+    "com.hk","org.hk","net.hk","gov.hk","edu.hk","idv.hk",
+    // Singapore
+    "com.sg","org.sg","net.sg","gov.sg","edu.sg","per.sg",
+    // Malaysia
+    "com.my","org.my","net.my","gov.my","edu.my","mil.my",
+    // Spain
+    "com.es","org.es","nom.es","gob.es","edu.es",
+    // Argentina
+    "com.ar","org.ar","net.ar","gov.ar","edu.ar","int.ar",
+    // Mexico
+    "com.mx","org.mx","net.mx","gob.mx","edu.mx",
+    // Colombia
+    "com.co","org.co","net.co","gov.co","edu.co","mil.co",
+    // Ukraine
+    "com.ua","org.ua","net.ua","gov.ua","edu.ua",
+    // Russia (rare but exists)
+    "com.ru","org.ru","net.ru",
+    // Turkey
+    "com.tr","org.tr","net.tr","gov.tr","edu.tr","bel.tr","k12.tr",
+    // Thailand
+    "co.th","or.th","net.th","go.th","ac.th","in.th",
+    // Kenya
+    "co.ke","or.ke","net.ke","go.ke","ac.ke","me.ke",
+  ]);
+
+  // Is the last two labels a known second-level ccTLD registry?
+  const twoLabel = `${sld}.${tld}`;
+  if (KNOWN_SLD_UNDER_CCTLD.has(twoLabel)) {
+    // Need a third label to get the registrant root — take last 3 labels
+    if (labels.length >= 3) return labels.slice(-3).join(".");
+    // Caller passed just "co.uk" itself — return as-is
+    return domain;
+  }
+
+  // Standard: take last 2 labels
+  return labels.slice(-2).join(".");
+}
 
 // ── Helpers — domain matching ─────────────────────────────────────────────────
 //
@@ -670,7 +736,7 @@ router.post("/ping", async (req, res) => {
 
     if (!lic && cleanDomain.split(".").length > 2) {
       // Subdomain install (e.g. app.example.com) — find the root-domain license
-      const root = cleanDomain.split(".").slice(-2).join(".");
+      const root = computeRootDomain(cleanDomain);
       const rootRows = await db.select().from(licensesTable)
         .where(eq(licensesTable.rootDomain, root)).limit(1);
       lic = rootRows[0];

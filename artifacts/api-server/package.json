@@ -17,9 +17,11 @@
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
-    "jsonwebtoken": "^9.0.3"
+    "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^6.9.16"
   },
   "devDependencies": {
+    "@types/nodemailer": "^6.4.17",
     "@types/bcrypt": "^6.0.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.10",
