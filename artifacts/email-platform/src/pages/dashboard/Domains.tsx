@@ -41,7 +41,8 @@ interface Domain {
   emailsPerMonth:   number | null;
   subscribersLimit: number | null;
   status: "active" | "expiring" | "revoked" | "expired" | "pending";
-  isManaged: boolean;
+  isActivated:      boolean;
+  isManaged:        boolean;
   expiresAt: string | null;
   createdAt: string;
   lastPingAt: string | null;
@@ -89,7 +90,12 @@ function StatusChip({ status }: { status: Domain["status"] }) {
     },
     pending: {
       icon: Clock,
-      label: "License Pending",
+      label: "No License",
+      cls: "text-muted-foreground bg-muted border-border",
+    },
+    awaiting: {
+      icon: Clock,
+      label: "Awaiting Activation",
       cls: "text-blue-600 bg-blue-500/10 border-blue-500/20",
     },
   };
@@ -168,7 +174,15 @@ function DomainCard({
                 </button>
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <StatusChip status={domain.status} />
+                <StatusChip
+                  status={
+                    domain.licenseId == null
+                      ? "pending"
+                      : !domain.isActivated
+                        ? ("awaiting" as any)
+                        : domain.status
+                  }
+                />
                 <span
                   className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border capitalize ${
                     PLAN_BADGE[domain.plan] ?? PLAN_BADGE.free
@@ -191,17 +205,27 @@ function DomainCard({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => domain.licenseId != null && onDownload(domain.licenseId)}
-              disabled={isDownloading || domain.licenseId == null}
+              onClick={() => domain.licenseId != null && domain.isActivated && onDownload(domain.licenseId)}
+              disabled={isDownloading || domain.licenseId == null || !domain.isActivated}
               className="gap-1.5 h-8 px-3 text-xs"
-              title={domain.licenseId == null ? "License not yet issued by admin" : "Download license file"}
+              title={
+                domain.licenseId == null
+                  ? "No license issued yet"
+                  : !domain.isActivated
+                    ? "Awaiting activation — complete payment and wait for admin confirmation"
+                    : "Download license file"
+              }
             >
               {isDownloading ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <DownloadCloud className="w-3.5 h-3.5" />
               )}
-              {domain.licenseId == null ? "Pending" : "License"}
+              {domain.licenseId == null
+                ? "No License"
+                : !domain.isActivated
+                  ? "Awaiting"
+                  : "Download"}
             </Button>
             <Button
               size="sm"
@@ -264,6 +288,14 @@ function DomainCard({
             </p>
           </div>
         </div>
+
+        {/* Awaiting activation notice */}
+        {domain.licenseId != null && !domain.isActivated && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-blue-700 bg-blue-500/5 border border-blue-400/30 px-3 py-2 rounded-lg">
+            <Info className="w-3.5 h-3.5 shrink-0" />
+            License pending activation. Once payment is confirmed, an admin will activate it and you'll be able to download.
+          </div>
+        )}
 
         {/* Expiry warning */}
         {days != null && days >= 0 && days <= 30 && (

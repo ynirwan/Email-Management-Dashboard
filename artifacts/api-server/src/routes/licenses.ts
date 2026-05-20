@@ -80,6 +80,7 @@ function formatLicense(lic: any, customerName?: string) {
     deliveryInfra:       lic.deliveryInfra        ?? null,
     deliveryRouting:     lic.deliveryRouting      ?? null,
     deliveryActiveSince: lic.deliveryActiveSince  ? toISO(lic.deliveryActiveSince) : null,
+    isActivated:   lic.isActivated ?? true,
     issuedAt:      lic.issuedAt    ? toISO(lic.issuedAt).slice(0, 10)  : null,
     expiresAt:     lic.expiresAt   ? toISO(lic.expiresAt).slice(0, 10) : null,
     revokedAt:     lic.revokedAt   ? toISO(lic.revokedAt)   : null,
@@ -264,6 +265,35 @@ router.patch("/:id/unrevoke", requireAdmin, async (req, res) => {
     if (!updated) { res.status(404).json({ error: "Not Found" }); return; }
     res.json({ license: formatLicense(updated) });
   } catch (err) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// ── PATCH /api/licenses/:id/activate — admin confirms payment + unlocks license ─
+// Sets is_activated = true so the user can download their license file.
+// Only admins can call this. Safe to call multiple times (idempotent).
+router.patch("/:id/activate", requireAdmin, async (req, res) => {
+  try {
+    const id = parseIdParam(req.params.id);
+    const rows = await db.select().from(licensesTable).where(eq(licensesTable.id, id)).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "Not Found", message: "License not found" }); return; }
+
+    const [updated] = await db
+      .update(licensesTable)
+      .set({ isActivated: true, updatedAt: new Date() })
+      .where(eq(licensesTable.id, id))
+      .returning();
+
+    const customers = await db
+      .select({ name: usersTable.name, company: usersTable.company })
+      .from(usersTable)
+      .where(eq(usersTable.id, updated.customerId))
+      .limit(1);
+    const customerName = customers[0]?.company ?? customers[0]?.name ?? "Unknown";
+
+    res.json({ message: "License activated. Customer can now download.", license: formatLicense(updated, customerName) });
+  } catch (err) {
+    console.error("PATCH /licenses/:id/activate error:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });

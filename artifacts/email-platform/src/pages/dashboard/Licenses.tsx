@@ -36,6 +36,7 @@ import {
   useRenewLicense,
   useAdminToken,
   useToggleManaged,
+  useActivateLicense,
   useAssignDelivery,
   ALL_FEATURES,
   FEATURE_LABELS,
@@ -825,6 +826,7 @@ export function Licenses() {
   const [detailLicense, setDetailLicense] = useState<any>(null);
   const [deliveryLicense, setDeliveryLicense] = useState<any>(null);
   const [togglingManagedId, setTogglingManagedId] = useState<number | null>(null);
+  const [activatingId, setActivatingId] = useState<number | null>(null);
 
   const { data: apiData, isLoading } = useLicenses(1, 50, search, statusFilter);
   const licenses: any[] = apiData?.licenses ?? [];
@@ -832,6 +834,7 @@ export function Licenses() {
   const revokeMutation    = useRevokeLicense();
   const unrevokeMutation  = useUnrevokeLicense();
   const managedMutation   = useToggleManaged();
+  const activateMutation  = useActivateLicense();
 
   const filtered = licenses.filter((l) => {
     const matchSearch =
@@ -843,10 +846,18 @@ export function Licenses() {
     return matchSearch && matchStatus && matchPlan;
   });
 
-  const activeCnt = licenses.filter((l) => l.status === "active").length;
-  const expiringCnt = licenses.filter((l) => l.status === "expiring").length;
-  const revokedCnt = licenses.filter((l) => l.status === "revoked").length;
+  const activeCnt    = licenses.filter((l) => l.status === "active").length;
+  const expiringCnt  = licenses.filter((l) => l.status === "expiring").length;
+  const revokedCnt   = licenses.filter((l) => l.status === "revoked").length;
+  const awaitingCnt  = licenses.filter((l) => !l.isActivated).length;
   const expiringSoon = licenses.filter((l) => l.status === "expiring");
+
+  const handleActivate = (lic: any) => {
+    setActivatingId(lic.id);
+    activateMutation.mutate(lic.id, {
+      onSettled: () => setActivatingId(null),
+    });
+  };
 
   const handleRevoke = (id: number) => {
     if (
@@ -890,8 +901,27 @@ export function Licenses() {
         </Button>
       </div>
 
+      {/* Awaiting activation banner */}
+      {awaitingCnt > 0 && (
+        <Card className="border-blue-300/50 bg-blue-50/30 mb-6">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-sm text-blue-800">
+                  {awaitingCnt} license{awaitingCnt > 1 ? "s" : ""} awaiting activation
+                </p>
+                <p className="text-xs text-blue-600 mt-0.5">
+                  These were auto-created when users registered domains. Activate them below once payment is confirmed.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         {[
           {
             label: "Active",
@@ -910,6 +940,12 @@ export function Licenses() {
             value: revokedCnt,
             color: "text-destructive",
             icon: ShieldAlert,
+          },
+          {
+            label: "Awaiting",
+            value: awaitingCnt,
+            color: "text-blue-500",
+            icon: Clock,
           },
           {
             label: "Total",
@@ -1102,7 +1138,14 @@ export function Licenses() {
 
                         {/* Status */}
                         <td className="px-5 py-3.5">
-                          {statusBadge(lic.status)}
+                          {!lic.isActivated ? (
+                            <Badge className="gap-1.5 bg-blue-500/10 text-blue-600 border border-blue-300/50">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
+                              Awaiting
+                            </Badge>
+                          ) : (
+                            statusBadge(lic.status)
+                          )}
                         </td>
 
                         {/* Managed */}
@@ -1138,6 +1181,20 @@ export function Licenses() {
                         {/* Actions */}
                         <td className="px-5 py-3.5">
                           <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            {/* Activate — only shown for unactivated (payment-pending) licenses */}
+                            {!lic.isActivated && (
+                              <Button
+                                size="sm"
+                                className="gap-1.5 h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700"
+                                onClick={() => handleActivate(lic)}
+                                isLoading={activatingId === lic.id}
+                                title="Confirm payment received and unlock license for download"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                Activate
+                              </Button>
+                            )}
+
                             <Button
                               size="sm"
                               variant="outline"

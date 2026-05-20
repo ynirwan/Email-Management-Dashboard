@@ -45,6 +45,12 @@ export const licensesTable = pgTable("licenses", {
   installCount:  integer("install_count").notNull().default(0),  // >1 = potential reuse
   ipMismatch:    boolean("ip_mismatch").notNull().default(false), // true if ping IP ≠ install IP
 
+  // ── Activation gate ───────────────────────────────────────────────────────
+  // FALSE for licenses auto-created when a user registers a domain (pending
+  // payment confirmation). Admin sets TRUE via PATCH /licenses/:id/activate.
+  // Admin-generated licenses (POST /licenses) are always created as TRUE.
+  isActivated: boolean("is_activated").notNull().default(true),
+
   // ── Ping tracking ─────────────────────────────────────────────────────────
   issuedAt:    timestamp("issued_at").notNull().defaultNow(),
   expiresAt:   timestamp("expires_at").notNull(),

@@ -70,6 +70,7 @@ router.get("/", requireAuth, async (req, res) => {
       subscribersLimit:    l.subscribersLimit,
       features:            parseFeatures(l.features),
       status:              computeStatus(l),
+      isActivated:         l.isActivated ?? true,
       isManaged:           l.isManaged,
       adminAccessEnabled:  l.adminAccessEnabled,
       // Delivery plan summary for the user dashboard
@@ -144,6 +145,16 @@ router.get("/license/:id/download", requireAuth, async (req, res) => {
     // Only allow the owner or admin to download
     if (lic.customerId !== user.id && user.role !== "admin") {
       res.status(403).json({ error: "Forbidden", message: "Not your license" }); return;
+    }
+
+    // Block download if not yet activated (payment not confirmed by admin).
+    if (!lic.isActivated) {
+      res.status(403).json({
+        error:   "Forbidden",
+        message: "Your license is pending activation. Please complete payment and wait for admin confirmation.",
+        code:    "LICENSE_NOT_ACTIVATED",
+      });
+      return;
     }
 
     // Block download of a revoked license — revokedAt is set by admin via PATCH /licenses/:id/revoke.

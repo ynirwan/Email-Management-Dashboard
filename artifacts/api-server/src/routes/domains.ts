@@ -76,6 +76,7 @@ router.get("/", requireAuth, async (req, res) => {
         emailsPerMonth:   lic?.emailsPerMonth   ?? null,
         subscribersLimit: lic?.subscribersLimit ?? null,
         status:           lic ? computeLicenseStatus(lic) : "pending",
+        isActivated:      lic?.isActivated ?? false,
         isManaged:        lic?.isManaged ?? false,
         expiresAt:        lic?.expiresAt
           ? toISO(lic.expiresAt)
@@ -162,6 +163,8 @@ router.post("/", requireAuth, async (req, res) => {
         features:         "[]",
         signature:        "",
         expiresAt,
+        // Locked until admin confirms payment and activates via PATCH /licenses/:id/activate
+        isActivated:      false,
       }).returning();
       licenseId = newLic?.id ?? null;
     } else {

@@ -240,6 +240,21 @@ export function useToggleManaged() {
 // Assigns or removes a managed delivery plan on a license.
 // action "assign" + planId → sets delivery block + injects delivery feature flags + re-signs
 // action "remove"          → clears delivery block + strips delivery flags + re-signs
+export function useActivateLicense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      fetchApi<{ message: string; license: License }>(`/api/licenses/${id}/activate`, {
+        method: "PATCH",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/licenses"] });
+      qc.invalidateQueries({ queryKey: ["/api/domains"] });
+      qc.invalidateQueries({ queryKey: ["/api/portal"] });
+    },
+  });
+}
+
 export function useAssignDelivery() {
   const qc = useQueryClient();
   return useMutation({
