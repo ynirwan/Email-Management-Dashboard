@@ -2,11 +2,13 @@ import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Spinner } from "@/components/ui/core";
 import { useInvoices, useBillingSummary, useMarkPaid, useCancelInvoice } from "@/hooks/use-billing";
+import { useAdminPaymentRequests, useApprovePaymentRequest, useRejectPaymentRequest } from "@/hooks/use-payments";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
 import {
   DollarSign, TrendingUp, Clock, AlertCircle,
   CheckCircle2, XCircle, MoreHorizontal, RefreshCw,
+  CreditCard, Image as ImageIcon, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -32,7 +34,31 @@ export function Billing() {
   const markPaid               = useMarkPaid();
   const cancelInvoice          = useCancelInvoice();
   const { toast }              = useToast();
-  const [activeMenu, setActiveMenu] = useState<number | null>(null);
+  const [activeMenu, setActiveMenu]       = useState<number | null>(null);
+  // Payment requests
+  const { data: prData, isLoading: prLoading } = useAdminPaymentRequests(1, 50, "pending");
+  const approveMutation  = useApprovePaymentRequest();
+  const rejectMutation   = useRejectPaymentRequest();
+  const [rejectingId, setRejectingId]     = useState<number | null>(null);
+  const [rejectNote, setRejectNote]       = useState("");
+  const [expandedProof, setExpandedProof] = useState<number | null>(null);
+
+  const pendingRequests = prData?.paymentRequests ?? [];
+
+  const handleApprove = (id: number) => {
+    approveMutation.mutate(id, {
+      onSuccess: (d) => toast({ title: "Payment approved", description: `Invoice ${d.invoiceNo} generated.` }),
+      onError:   (e) => toast({ title: "Error", description: (e as any).message, variant: "destructive" }),
+    });
+  };
+
+  const handleReject = (id: number) => {
+    if (!rejectNote.trim()) { toast({ title: "Please enter a rejection reason", variant: "destructive" }); return; }
+    rejectMutation.mutate({ id, adminNote: rejectNote.trim() }, {
+      onSuccess: () => { toast({ title: "Request rejected" }); setRejectingId(null); setRejectNote(""); },
+      onError:   (e) => toast({ title: "Error", description: (e as any).message, variant: "destructive" }),
+    });
+  };
 
   const handleMarkPaid = (id: number) => {
     markPaid.mutate(id, {
@@ -133,6 +159,129 @@ export function Billing() {
           </CardContent>
         </Card>
       )}
+
+      {/* Pending Payment Requests panel */}
+      <Card className="border-amber-200 bg-amber-50/30 dark:bg-amber-950/10 mb-8">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-amber-600" />
+            Pending Payment Requests
+            {pendingRequests.length > 0 && (
+              <Badge variant="outline" className="ml-1 border-amber-400 text-amber-700 bg-amber-100">
+                {pendingRequests.length}
+              </Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {prLoading ? (
+            <div className="flex justify-center py-6"><Spinner /></div>
+          ) : pendingRequests.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-2">No pending payment requests. All caught up!</p>
+          ) : (
+            <div className="space-y-3">
+              {pendingRequests.map((pr) => (
+                <div key={pr.id} className="rounded-lg border border-amber-200 bg-card overflow-hidden">
+                  <div className="flex items-start gap-4 p-4">
+                    {/* Customer info */}
+                    <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-1">
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Customer</p>
+                        <p className="text-sm font-medium">{pr.userCompany ?? pr.userName ?? `User #${pr.userId}`}</p>
+                        <p className="text-xs text-muted-foreground">{pr.userEmail}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Request</p>
+                        <p className="text-sm capitalize">{pr.type.replace("_", " ")} payment</p>
+                        {pr.deliveryPlanId && (
+                          <p className="text-xs text-muted-foreground">{pr.deliveryPlanId.replace(/_/g, " ")}</p>
+                        )}
+                        {pr.licenseId && (
+                          <p className="text-xs text-muted-foreground">License #{pr.licenseId}</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Payment</p>
+                        <p className="text-sm font-bold">${pr.amount.toFixed(2)} {pr.currency}</p>
+                        <p className="text-xs text-muted-foreground">{pr.paymentMethod.replace("_", " ")}{pr.transactionRef ? ` · ${pr.transactionRef}` : ""}</p>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="shrink-0 flex flex-col gap-2 items-end">
+                      <Button
+                        size="sm"
+                        onClick={() => handleApprove(pr.id)}
+                        disabled={approveMutation.isPending}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                        Approve
+                      </Button>
+                      {rejectingId === pr.id ? (
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="destructive" onClick={() => handleReject(pr.id)} disabled={rejectMutation.isPending}>
+                            Confirm Reject
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => { setRejectingId(null); setRejectNote(""); }}>
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => setRejectingId(pr.id)} className="text-destructive border-destructive/30 hover:bg-destructive/10">
+                          <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
+                        </Button>
+                      )}
+                      {pr.proofImageUrl && (
+                        <button
+                          onClick={() => setExpandedProof(expandedProof === pr.id ? null : pr.id)}
+                          className="text-xs text-primary flex items-center gap-1 mt-1"
+                        >
+                          <ImageIcon className="h-3 w-3" />
+                          Proof
+                          {expandedProof === pr.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Reject note input */}
+                  {rejectingId === pr.id && (
+                    <div className="px-4 pb-4 border-t border-border/40 pt-3">
+                      <input
+                        type="text"
+                        value={rejectNote}
+                        onChange={(e) => setRejectNote(e.target.value)}
+                        placeholder="Reason for rejection (required)…"
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        autoFocus
+                      />
+                    </div>
+                  )}
+
+                  {/* Notes row */}
+                  {pr.notes && (
+                    <div className="px-4 pb-3 border-t border-border/30 pt-2">
+                      <p className="text-xs text-muted-foreground"><span className="font-medium">Note:</span> {pr.notes}</p>
+                    </div>
+                  )}
+
+                  {/* Proof image */}
+                  {expandedProof === pr.id && pr.proofImageUrl && (
+                    <div className="border-t border-border/40 p-4 bg-muted/20">
+                      <img
+                        src={pr.proofImageUrl}
+                        alt="Payment proof"
+                        className="max-h-80 rounded-md object-contain mx-auto"
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Invoices table */}
       <Card className="border-border/50">

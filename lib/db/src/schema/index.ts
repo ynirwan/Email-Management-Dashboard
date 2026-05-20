@@ -3,3 +3,4 @@ export * from "./settings";
 export * from "./domains";
 export * from "./licenses";
 export * from "./invoices";
+export * from "./payment-requests";
