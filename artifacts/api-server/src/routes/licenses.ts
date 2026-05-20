@@ -144,11 +144,17 @@ function formatLicense(lic: any, customerName?: string) {
     deliveryInfra:       lic.deliveryInfra        ?? null,
     deliveryRouting:     lic.deliveryRouting      ?? null,
     deliveryActiveSince: lic.deliveryActiveSince  ? toISO(lic.deliveryActiveSince) : null,
-    issuedAt:   lic.issuedAt  ? toISO(lic.issuedAt).slice(0, 10)  : null,
-    expiresAt:  lic.expiresAt ? toISO(lic.expiresAt).slice(0, 10) : null,
-    revokedAt:  lic.revokedAt  ? toISO(lic.revokedAt)  : null,
-    lastPingAt: lic.lastPingAt ? toISO(lic.lastPingAt) : null,
-    pingCount:  lic.pingCount  ?? 0,
+    issuedAt:      lic.issuedAt    ? toISO(lic.issuedAt).slice(0, 10)  : null,
+    expiresAt:     lic.expiresAt   ? toISO(lic.expiresAt).slice(0, 10) : null,
+    revokedAt:     lic.revokedAt   ? toISO(lic.revokedAt)   : null,
+    lastPingAt:    lic.lastPingAt  ? toISO(lic.lastPingAt)  : null,
+    lastPingIp:    lic.lastPingIp  ?? null,
+    pingCount:     lic.pingCount   ?? 0,
+    // Installation tracking
+    installedAt:   lic.installedAt  ? toISO(lic.installedAt) : null,
+    installedIp:   lic.installedIp  ?? null,
+    installCount:  lic.installCount ?? 0,
+    ipMismatch:    lic.ipMismatch   ?? false,
   };
 }
 
@@ -523,6 +529,107 @@ router.post("/:id/admin-token", requireAdmin, async (req, res) => {
   }
 });
 
+// ── POST /api/licenses/register-install ──────────────────────────────────────
+// Called once by setup_server.py immediately after a successful installation.
+// Records the server's public IP so the dashboard can:
+//   • Show "installed / not installed" status per license
+//   • Detect future pings from a different IP (potential license reuse)
+//
+// Body: { domain, signature, server_ip }
+// No auth required — the license signature proves the caller owns the install.
+router.post("/register-install", async (req, res) => {
+  try {
+    const { domain, signature, server_ip } = req.body;
+    if (!domain || !signature) {
+      res.status(400).json({ ok: false, message: "domain and signature required" }); return;
+    }
+
+    const cleanDomain = domain.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").toLowerCase().trim();
+    const clientIp    = server_ip?.trim()
+      || (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim()
+      || req.socket.remoteAddress
+      || "";
+
+    // Verify JWT signature — same logic as ping
+    let decoded: any;
+    try { decoded = jwt.verify(signature, LICENSE_SECRET); }
+    catch {
+      res.status(401).json({ ok: false, message: "Invalid license signature" }); return;
+    }
+
+    // Domain cross-check
+    const jwtDomain     = (decoded.domain     ?? "").toLowerCase();
+    const jwtRootDomain = (decoded.root_domain ?? "").toLowerCase();
+    if (!domainMatchesLicense(cleanDomain, jwtDomain, jwtRootDomain)) {
+      res.status(401).json({ ok: false, message: `License was issued for '${jwtDomain}', not '${cleanDomain}'` }); return;
+    }
+
+    // Look up license row (exact + root-domain fallback)
+    const rows = await db.select().from(licensesTable).where(eq(licensesTable.domain, cleanDomain)).limit(1);
+    let lic = rows[0];
+    if (!lic && cleanDomain.split(".").length > 2) {
+      const root = cleanDomain.split(".").slice(-2).join(".");
+      const rootRows = await db.select().from(licensesTable).where(eq(licensesTable.rootDomain, root)).limit(1);
+      lic = rootRows[0];
+    }
+    if (!lic) {
+      res.status(404).json({ ok: false, message: "No license found for this domain" }); return;
+    }
+
+    const isFirstInstall = !lic.installedAt;
+    const ipChanged      = !!lic.installedIp && !!clientIp && clientIp !== lic.installedIp;
+
+    if (!isFirstInstall && ipChanged) {
+      console.warn(
+        `[LICENSE] Re-install on different IP for lic #${lic.id} domain=${lic.domain}: ` +
+        `original=${lic.installedIp} new=${clientIp} count=${(lic.installCount ?? 0) + 1}`
+      );
+    }
+
+    await db.update(licensesTable)
+      .set({
+        installedAt:  lic.installedAt ?? new Date(),   // keep original first-install timestamp
+        installedIp:  isFirstInstall ? clientIp : lic.installedIp,  // never overwrite original IP
+        installCount: sql`${licensesTable.installCount} + 1`,
+        ipMismatch:   ipChanged ? true : lic.ipMismatch,
+        updatedAt:    new Date(),
+      })
+      .where(eq(licensesTable.id, lic.id));
+
+    res.json({
+      ok:               true,
+      is_first_install: isFirstInstall,
+      ip_changed:       ipChanged,
+      message:          isFirstInstall
+        ? "Installation registered."
+        : ipChanged
+          ? "Re-installation detected from a different IP. This has been flagged."
+          : "Installation re-registered (same IP).",
+    });
+  } catch (err) {
+    console.error("POST /licenses/register-install error:", err);
+    res.status(500).json({ ok: false, message: "Internal server error" });
+  }
+});
+
+// ── Helpers — domain matching ─────────────────────────────────────────────────
+//
+// A ping from "app.example.com" is valid for a license issued for:
+//   • "app.example.com"  (exact match)
+//   • "example.com"      (root-domain match — customer installed on a subdomain)
+//
+// The JWT cross-check below prevents a valid JWT for an unrelated domain from
+// passing even if a root-domain lookup accidentally finds the wrong row.
+
+function domainMatchesLicense(pingDomain: string, licDomain: string, licRootDomain: string): boolean {
+  if (pingDomain === licDomain) return true;
+  if (licRootDomain) {
+    if (pingDomain === licRootDomain) return true;
+    if (pingDomain.endsWith("." + licRootDomain)) return true;
+  }
+  return false;
+}
+
 // ── POST /api/licenses/ping ───────────────────────────────────────────────────
 // Fix #5: response is snake_case throughout to match license file format
 // Fix #6: root_domain added
@@ -534,16 +641,43 @@ router.post("/ping", async (req, res) => {
     }
 
     const cleanDomain = domain.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").toLowerCase().trim();
+
+    // ── 1. Verify JWT signature ───────────────────────────────────────────────
+    // Do this BEFORE the DB lookup so we reject garbage tokens cheaply.
+    let decoded: any;
+    try {
+      decoded = jwt.verify(signature, LICENSE_SECRET);
+    } catch {
+      res.status(401).json({ valid: false, status: "invalid_signature", message: "License signature invalid or tampered" }); return;
+    }
+
+    // ── 2. Cross-check: JWT must have been issued for this domain ─────────────
+    // This prevents a valid JWT for domain-A being replayed against domain-B.
+    const jwtDomain     = (decoded.domain     ?? "").toLowerCase();
+    const jwtRootDomain = (decoded.root_domain ?? "").toLowerCase();
+    if (!domainMatchesLicense(cleanDomain, jwtDomain, jwtRootDomain)) {
+      res.status(401).json({
+        valid:   false,
+        status:  "domain_mismatch",
+        message: `License was issued for '${jwtDomain}', not '${cleanDomain}'`,
+      }); return;
+    }
+
+    // ── 3. Look up license row ────────────────────────────────────────────────
+    // Try exact domain match first; fall back to root-domain for subdomain installs.
     const rows = await db.select().from(licensesTable).where(eq(licensesTable.domain, cleanDomain)).limit(1);
-    const lic  = rows[0];
+    let lic = rows[0];
+
+    if (!lic && cleanDomain.split(".").length > 2) {
+      // Subdomain install (e.g. app.example.com) — find the root-domain license
+      const root = cleanDomain.split(".").slice(-2).join(".");
+      const rootRows = await db.select().from(licensesTable)
+        .where(eq(licensesTable.rootDomain, root)).limit(1);
+      lic = rootRows[0];
+    }
 
     if (!lic) {
       res.status(404).json({ valid: false, status: "not_found", message: "No license found for this domain" }); return;
-    }
-
-    try { jwt.verify(signature, LICENSE_SECRET); }
-    catch {
-      res.status(401).json({ valid: false, status: "invalid_signature", message: "License signature invalid or tampered" }); return;
     }
 
     const status = computeStatus(lic);
@@ -555,8 +689,34 @@ router.post("/ping", async (req, res) => {
       res.json({ valid: false, status: "expired", message: "License expired. Please renew." }); return;
     }
 
+    // Extract the real client IP (respects X-Forwarded-For from a reverse proxy)
+    const pingIp: string =
+      (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim()
+      ?? req.socket.remoteAddress
+      ?? "";
+
+    // Detect if this ping is coming from a different IP than the registered install.
+    // We warn but never block — the customer may have moved servers legitimately.
+    const mismatch =
+      !!lic.installedIp &&
+      !!pingIp &&
+      pingIp !== lic.installedIp;
+
+    if (mismatch) {
+      console.warn(
+        `[LICENSE] IP mismatch for lic #${lic.id} domain=${lic.domain}: ` +
+        `installed=${lic.installedIp} ping=${pingIp}`
+      );
+    }
+
     await db.update(licensesTable)
-      .set({ lastPingAt: new Date(), pingCount: sql`${licensesTable.pingCount} + 1`, updatedAt: new Date() })
+      .set({
+        lastPingAt:  new Date(),
+        lastPingIp:  pingIp || null,
+        pingCount:   sql`${licensesTable.pingCount} + 1`,
+        ipMismatch:  mismatch ? true : lic.ipMismatch,  // sticky — stays true once flagged
+        updatedAt:   new Date(),
+      })
       .where(eq(licensesTable.id, lic.id));
 
     // Delivery block in ping response — email app updates its delivery config on each ping
@@ -576,19 +736,109 @@ router.post("/ping", async (req, res) => {
       valid:                true,
       status,
       domain:               lic.domain,
-      root_domain:          lic.rootDomain ?? "",      // Fix #6
+      root_domain:          lic.rootDomain ?? "",
       plan:                 lic.plan,
-      emails_per_month:     lic.emailsPerMonth,        // Fix #5: snake_case
-      subscribers_limit:    lic.subscribersLimit,      // Fix #5: snake_case
+      emails_per_month:     lic.emailsPerMonth,
+      subscribers_limit:    lic.subscribersLimit,
       features:             parseFeatures(lic.features),
-      expires_at:           toISO(lic.expiresAt),      // Fix #5: snake_case
+      expires_at:           toISO(lic.expiresAt),
       admin_access_allowed: (lic.isManaged ?? false) && (lic.adminAccessEnabled ?? false),
-      delivery,                                        // New: delivery config
+      delivery,
+      ip_mismatch:          mismatch,   // email app logs a warning when true
       message:              status === "expiring" ? "License expiring soon — please renew." : "License valid.",
     });
   } catch (err) {
     console.error("POST /licenses/ping error:", err);
     res.status(500).json({ valid: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/licenses/:id ─────────────────────────────────────────────────────
+router.get("/:id", requireAuth, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const id   = parseIdParam(req.params.id);
+
+    const rows = await db
+      .select({ lic: licensesTable, customer: { id: usersTable.id, name: usersTable.name, email: usersTable.email, company: usersTable.company } })
+      .from(licensesTable)
+      .leftJoin(usersTable, eq(licensesTable.customerId, usersTable.id))
+      .where(eq(licensesTable.id, id))
+      .limit(1);
+
+    if (!rows[0]) { res.status(404).json({ error: "Not Found", message: "License not found" }); return; }
+
+    const { lic, customer } = rows[0];
+
+    // Non-admin users may only see their own licenses
+    if (user.role !== "admin" && lic.customerId !== user.id) {
+      res.status(403).json({ error: "Forbidden" }); return;
+    }
+
+    const customerName = customer?.company ?? customer?.name ?? "Unknown";
+    res.json({ license: formatLicense(lic, customerName) });
+  } catch (err) {
+    console.error("GET /licenses/:id error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// ── POST /api/licenses/:id/renew ──────────────────────────────────────────────
+// Updates the expiry date and re-signs the license so the customer can download
+// a fresh file. The email app picks up the new expiry on its next ping.
+router.post("/:id/renew", requireAdmin, async (req, res) => {
+  try {
+    const id = parseIdParam(req.params.id);
+    const { expiresAt } = req.body;
+
+    if (!expiresAt) {
+      res.status(400).json({ error: "Bad Request", message: "expiresAt is required" }); return;
+    }
+
+    const newExpiry = new Date(expiresAt);
+    if (isNaN(newExpiry.getTime())) {
+      res.status(400).json({ error: "Bad Request", message: "expiresAt is not a valid date" }); return;
+    }
+    if (newExpiry <= new Date()) {
+      res.status(400).json({ error: "Bad Request", message: "expiresAt must be in the future" }); return;
+    }
+
+    const rows = await db
+      .select({ lic: licensesTable, owner: { name: usersTable.name, email: usersTable.email, company: usersTable.company } })
+      .from(licensesTable)
+      .leftJoin(usersTable, eq(licensesTable.customerId, usersTable.id))
+      .where(eq(licensesTable.id, id))
+      .limit(1);
+
+    if (!rows[0]) { res.status(404).json({ error: "Not Found", message: "License not found" }); return; }
+
+    const { lic, owner } = rows[0];
+
+    // Clear revokedAt if previously revoked so a renewal also un-revokes
+    const [updated] = await db
+      .update(licensesTable)
+      .set({ expiresAt: newExpiry, revokedAt: null, updatedAt: new Date() })
+      .where(eq(licensesTable.id, id))
+      .returning();
+
+    // Re-sign with the new expiry
+    const licensePayload = buildLicensePayload(updated, owner);
+    const signature      = signPayload(licensePayload);
+
+    const [resigned] = await db
+      .update(licensesTable)
+      .set({ signature, updatedAt: new Date() })
+      .where(eq(licensesTable.id, id))
+      .returning();
+
+    const customerName = owner?.company ?? owner?.name ?? "Unknown";
+    res.json({
+      message: `License renewed. New expiry: ${newExpiry.toISOString().slice(0, 10)}`,
+      license: formatLicense(resigned, customerName),
+    });
+  } catch (err) {
+    console.error("POST /licenses/:id/renew error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 

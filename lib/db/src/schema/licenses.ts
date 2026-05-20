@@ -36,14 +36,24 @@ export const licensesTable = pgTable("licenses", {
   deliveryRouting:     text("delivery_routing"),              // e.g. "Better inbox placement"
   deliveryActiveSince: timestamp("delivery_active_since"),    // when this delivery plan was activated
 
+  // ── Installation tracking ─────────────────────────────────────────────────
+  // Set once when the email app calls POST /api/licenses/register-install after
+  // a successful setup-wizard run.  Subsequent install attempts from a *different*
+  // IP increment installCount and flag the license for review.
+  installedAt:   timestamp("installed_at"),
+  installedIp:   text("installed_ip"),              // public IP at first install
+  installCount:  integer("install_count").notNull().default(0),  // >1 = potential reuse
+  ipMismatch:    boolean("ip_mismatch").notNull().default(false), // true if ping IP ≠ install IP
+
   // ── Ping tracking ─────────────────────────────────────────────────────────
-  issuedAt:   timestamp("issued_at").notNull().defaultNow(),
-  expiresAt:  timestamp("expires_at").notNull(),
-  revokedAt:  timestamp("revoked_at"),
-  lastPingAt: timestamp("last_ping_at"),
-  pingCount:  integer("ping_count").notNull().default(0),
-  createdAt:  timestamp("created_at").notNull().defaultNow(),
-  updatedAt:  timestamp("updated_at").notNull().defaultNow(),
+  issuedAt:    timestamp("issued_at").notNull().defaultNow(),
+  expiresAt:   timestamp("expires_at").notNull(),
+  revokedAt:   timestamp("revoked_at"),
+  lastPingAt:  timestamp("last_ping_at"),
+  lastPingIp:  text("last_ping_ip"),               // IP from most recent ping
+  pingCount:   integer("ping_count").notNull().default(0),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+  updatedAt:   timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const insertLicenseSchema = createInsertSchema(licensesTable).omit({ id: true, createdAt: true, updatedAt: true });

@@ -6,20 +6,6 @@ import { useAuditLogs } from "@/hooks/use-audit";
 import type { AuditCategory } from "@/hooks/use-audit";
 import { format, parseISO } from "date-fns";
 
-const MOCK_LOGS = [
-  { id: 1,  action: "License Generated",    category: "license",  detail: "Acme Corp — Pro plan, 12 months · domain: app.acme.io",           adminName: "Super Admin",   createdAt: "2026-03-13T14:32:00Z" },
-  { id: 2,  action: "User Suspended",       category: "security", detail: "user@example.com — Reason: ToS violation (spam detected)",         adminName: "Super Admin",   createdAt: "2026-03-13T11:18:00Z" },
-  { id: 3,  action: "Plan Upgraded",        category: "plan",     detail: "Velox Labs: Starter → Pro — Billing updated",                     adminName: "Super Admin",   createdAt: "2026-03-12T16:44:00Z" },
-  { id: 4,  action: "License Revoked",      category: "license",  detail: "OldCo Ltd — Reason: non-payment (90 days overdue)",               adminName: "Super Admin",   createdAt: "2026-03-12T09:20:00Z" },
-  { id: 5,  action: "Email Quota Updated",  category: "plan",     detail: "Nimbus Inc — 250k → 500k emails/month",                          adminName: "Support Admin", createdAt: "2026-03-11T13:55:00Z" },
-  { id: 6,  action: "New Customer Added",   category: "user",     detail: "FlowTech — Enterprise plan assigned on signup",                   adminName: "Super Admin",   createdAt: "2026-03-11T09:10:00Z" },
-  { id: 7,  action: "License Renewed",      category: "license",  detail: "Torrent SaaS — Extended 12 months from today",                   adminName: "Super Admin",   createdAt: "2026-03-10T17:30:00Z" },
-  { id: 8,  action: "Failed Login Attempt", category: "security", detail: "IP: 192.168.1.45 — 5 consecutive failures, auto-blocked",        adminName: "System",        createdAt: "2026-03-10T03:22:00Z" },
-  { id: 9,  action: "Feature Flag Enabled", category: "plan",     detail: "Apex Digital — Automation workflows unlocked",                   adminName: "Support Admin", createdAt: "2026-03-09T14:00:00Z" },
-  { id: 10, action: "Customer Deleted",     category: "user",     detail: "TestCo — Account and all data permanently purged",               adminName: "Super Admin",   createdAt: "2026-03-08T11:30:00Z" },
-  { id: 11, action: "License Generated",    category: "license",  detail: "Apex Digital — Pro plan, 12 months · domain: send.apex.dev",    adminName: "Support Admin", createdAt: "2026-03-07T10:15:00Z" },
-  { id: 12, action: "Admin Password Reset", category: "security", detail: "Super Admin — password changed via recovery flow",               adminName: "Super Admin",   createdAt: "2026-03-06T08:45:00Z" },
-] as any[];
 
 const CATEGORY_CONFIG: Record<string, { color: string; bg: string; icon: any }> = {
   license:  { color: "text-primary",          bg: "bg-primary/10",     icon: ShieldAlert },
@@ -43,15 +29,8 @@ export function AuditLogs() {
   const [range, setRange] = useState("7d");
 
   const { data: apiData, isLoading } = useAuditLogs(1, 50, search, activeTab as AuditCategory | "", range);
-  const logs: any[] = apiData?.logs ?? MOCK_LOGS;
-
-  const filtered = apiData
-    ? logs
-    : logs.filter((l) => {
-        const matchCat    = !activeTab || l.category === activeTab;
-        const matchSearch = !search || l.action.toLowerCase().includes(search.toLowerCase()) || l.detail.toLowerCase().includes(search.toLowerCase()) || l.adminName.toLowerCase().includes(search.toLowerCase());
-        return matchCat && matchSearch;
-      });
+  const logs: any[] = apiData?.logs ?? [];
+  const filtered = logs;
 
   return (
     <DashboardLayout>
