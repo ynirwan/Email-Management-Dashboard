@@ -1,42 +1,386 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { motion, useInView } from "framer-motion";
 import { Link } from "wouter";
 import {
-  ArrowRight,
-  CheckCircle2,
-  Zap,
-  Shield,
-  BarChart,
-  Server,
-  Mail,
-  Activity,
-  Send,
-  Users,
-  Filter,
-  FlaskConical,
-  BarChart3,
-  TrendingUp,
-  Globe,
-  Lock,
-  Cpu,
-  Tag,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle,
-  AlertTriangle,
-  XCircle,
-  Wifi,
-  Code2,
-  Building2,
-  Briefcase,
+  ArrowRight, CheckCircle2, Zap, Server, Mail,
+  Activity, Send, Users, Filter, FlaskConical, BarChart3, TrendingUp,
+  Globe, Lock, Tag, ChevronDown, ChevronUp, CheckCircle,
+  Wifi, Code2, Building2, Briefcase, Inbox,
 } from "lucide-react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button, Card, CardContent } from "@/components/ui/core";
 import { cn } from "@/lib/utils";
 
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Global CSS animations injected once
+// ─────────────────────────────────────────────────────────────────────────────
+const ANIM_CSS = `
+@keyframes env-hero {
+  0%   { transform: translateX(0)    translateY(0px)  rotate(var(--r)); opacity:0; }
+  8%   { opacity: var(--op); }
+  92%  { opacity: var(--op); }
+  100% { transform: translateX(75vw) translateY(-18px) rotate(calc(var(--r) + 6deg)); opacity:0; }
+}
+@keyframes env-cta {
+  0%   { transform: translateX(var(--sx)) translateY(0px)   rotate(var(--r)); opacity:0; }
+  10%  { opacity: var(--op); }
+  90%  { opacity: var(--op); }
+  100% { transform: translateX(calc(var(--sx) + var(--dx))) translateY(-60px) rotate(calc(var(--r) + 8deg)); opacity:0; }
+}
+@keyframes float-pop {
+  0%,100% { transform:translateY(0px); }
+  50%     { transform:translateY(-2px); }
+}
+@keyframes server-flicker {
+  0%,18%,20%,22%,60%,62%,100% { opacity:1; }
+  19%,21%,61% { opacity:0.3; }
+}
+@keyframes section-flash {
+  0%,100% { text-shadow:none; }
+  30%     { text-shadow:0 0 22px hsl(var(--primary)/0.55); color:hsl(var(--primary)); }
+}
+.env-hero-anim { animation: env-hero var(--dur) var(--del) ease-in-out infinite; }
+.env-cta-anim  { animation: env-cta  var(--dur) var(--del) ease-in-out infinite; }
+.pop-float     { animation: float-pop 4s ease-in-out infinite; }
+.srv-flicker   { animation: server-flicker 4s linear 0.8s 1; }
+.sec-flash     { animation: section-flash 0.9s ease-out; }
+`;
+
+function StyleInjector() {
+  return <style dangerouslySetInnerHTML={{ __html: ANIM_CSS }} />;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A — Hero Envelope Journey  (left → server midpoint → inbox right)
+// ─────────────────────────────────────────────────────────────────────────────
+const HERO_ENVS = [
+  { y: "28%", dur: "9s",  del: "0s",   r: "-8deg",  op: "0.18", size: 16 },
+  { y: "48%", dur: "12s", del: "2.5s", r: "5deg",   op: "0.13", size: 20 },
+  { y: "38%", dur: "11s", del: "5s",   r: "-4deg",  op: "0.16", size: 14 },
+  { y: "62%", dur: "14s", del: "1.2s", r: "10deg",  op: "0.10", size: 18 },
+  { y: "22%", dur: "10s", del: "7s",   r: "-12deg", op: "0.12", size: 15 },
+];
+
+function HeroEnvelopes() {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
+      {/* Source icon — left edge */}
+      <div className="absolute left-6 top-1/2 -translate-y-1/2 text-primary/20">
+        <Server className="w-8 h-8" />
+      </div>
+      {/* Destination icon — right edge */}
+      <div className="absolute right-6 top-1/2 -translate-y-1/2 text-primary/20">
+        <Inbox className="w-8 h-8" />
+      </div>
+      {/* Drifting envelopes */}
+      {HERO_ENVS.map((e, i) => (
+        <span
+          key={i}
+          className="env-hero-anim absolute left-6 text-primary"
+          style={{
+            top: e.y,
+            "--dur": e.dur,
+            "--del": e.del,
+            "--r": e.r,
+            "--op": e.op,
+          } as React.CSSProperties}
+        >
+          <Mail style={{ width: e.size, height: e.size, opacity: parseFloat(e.op) }} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// C — Word-by-word reveal on "without deliverability headaches"
+// ─────────────────────────────────────────────────────────────────────────────
+const GRADIENT_WORDS = "without deliverability headaches".split(" ");
+
+const wordV = {
+  hidden: { opacity: 0, y: 8, filter: "blur(2px)" },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+    transition: { duration: 0.38, delay: 0.35 + i * 0.08, ease: "easeOut" },
+  }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// K — CountUp hook
+// ─────────────────────────────────────────────────────────────────────────────
+function useCountUp(target: number, duration = 650) {
+  const [val, setVal] = useState(0);
+  const elRef = useRef<HTMLSpanElement>(null);
+  const started = useRef(false);
+
+  useEffect(() => {
+    const el = elRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !started.current) {
+          started.current = true;
+          const t0 = performance.now();
+          const tick = (now: number) => {
+            const p = Math.min((now - t0) / duration, 1);
+            const eased = 1 - Math.pow(1 - p, 3);
+            setVal(Math.round(eased * target));
+            if (p < 1) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }
+      },
+      { threshold: 0.6 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [target, duration]);
+
+  return { val, elRef };
+}
+
+function CUp({ n, pre = "", suf = "", cls = "" }: { n: number; pre?: string; suf?: string; cls?: string }) {
+  const { val, elRef } = useCountUp(n);
+  return <span ref={elRef} className={cls}>{pre}{val}{suf}</span>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P — Cursor glow (page-wide, desktop only)
+// ─────────────────────────────────────────────────────────────────────────────
+function CursorGlow() {
+  const [pos, setPos] = useState({ x: -300, y: -300 });
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const mv = (e: MouseEvent) => { setPos({ x: e.clientX, y: e.clientY }); setOn(true); };
+    const lv = () => setOn(false);
+    window.addEventListener("mousemove", mv, { passive: true });
+    document.addEventListener("mouseleave", lv);
+    return () => { window.removeEventListener("mousemove", mv); document.removeEventListener("mouseleave", lv); };
+  }, []);
+  return (
+    <div className="hidden md:block fixed inset-0 pointer-events-none z-[9998]" aria-hidden>
+      <div
+        style={{
+          position: "absolute",
+          left: pos.x - 220,
+          top:  pos.y - 220,
+          width: 440, height: 440,
+          borderRadius: "50%",
+          background: "radial-gradient(circle, hsl(var(--primary)/0.06) 0%, transparent 68%)",
+          opacity: on ? 1 : 0,
+          transition: "opacity 0.25s ease",
+        }}
+      />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E + F — Step cards with connecting line + glow cascade
+// ─────────────────────────────────────────────────────────────────────────────
+const STEPS = [
+  { step: "01", label: "Install on your server" },
+  { step: "02", label: "Create users (shared workspace)" },
+  { step: "03", label: "Connect SMTP (SES, SendGrid, etc.)" },
+  { step: "04", label: "Send your campaigns" },
+  { step: "05", label: "Upgrade delivery (optional)" },
+];
+
+function StepCards() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isInView = useInView(containerRef, { once: true, amount: 0.4 });
+
+  return (
+    <div ref={containerRef} className="relative">
+      {/* F — Teal connecting line (md+) */}
+      <div className="hidden md:block absolute top-[38px] inset-x-0 pointer-events-none" style={{ zIndex: 0 }}>
+        <svg width="100%" height="3" preserveAspectRatio="none" viewBox="0 0 1000 3">
+          <line
+            x1="0" y1="1.5" x2="1000" y2="1.5"
+            stroke="hsl(var(--primary))"
+            strokeWidth="1.5"
+            strokeOpacity="0.4"
+            strokeLinecap="round"
+            strokeDasharray="1000"
+            style={{
+              strokeDashoffset: isInView ? 0 : 1000,
+              transition: isInView ? "stroke-dashoffset 1.1s cubic-bezier(0.4,0,0.2,1) 0.15s" : "none",
+            }}
+          />
+        </svg>
+      </div>
+
+      {/* E — Cards with sequential glow */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3" style={{ position: "relative", zIndex: 1 }}>
+        {STEPS.map((s, i) => (
+          <motion.div
+            key={s.step}
+            initial={{ opacity: 0, y: 18 }}
+            animate={isInView ? {
+              opacity: 1,
+              y: 0,
+              boxShadow: [
+                "0 0 0 0px transparent",
+                `0 0 0 4px hsl(var(--primary)/0.22), 0 0 18px hsl(var(--primary)/0.14)`,
+                "0 0 0 0px transparent",
+              ],
+            } : {}}
+            transition={{
+              opacity:    { duration: 0.4,  delay: i * 0.12 },
+              y:          { duration: 0.4,  delay: i * 0.12 },
+              boxShadow:  { duration: 0.75, delay: i * 0.25 + 0.2, times: [0, 0.45, 1] },
+            }}
+            className="rounded-xl"
+          >
+            <Card className="text-center hover:border-primary/50 transition-colors">
+              <CardContent className="p-5">
+                <motion.p
+                  animate={isInView ? { color: ["hsl(var(--primary)/0.3)", "hsl(var(--primary))", "hsl(var(--primary)/0.35)"] } : {}}
+                  transition={{ duration: 0.7, delay: i * 0.25 + 0.25, times: [0, 0.45, 1] }}
+                  className="text-2xl font-extrabold mb-1"
+                  style={{ color: "hsl(var(--primary)/0.3)" }}
+                >
+                  {s.step}
+                </motion.p>
+                <p className="text-sm font-medium leading-snug">{s.label}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G + H — Tilt + cursor-glow card, with compare-dim support
+// ─────────────────────────────────────────────────────────────────────────────
+function TiltCard({
+  children, dimmed = false, onEnter, onLeave, className = "",
+}: {
+  children: React.ReactNode;
+  dimmed?: boolean;
+  onEnter?: () => void;
+  onLeave?: () => void;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
+  const [glow, setGlow] = useState({ x: 50, y: 50 });
+  const [active, setActive] = useState(false);
+
+  const onMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const nx = (e.clientX - r.left) / r.width;
+    const ny = (e.clientY - r.top)  / r.height;
+    setTilt({ rx: (ny - 0.5) * -9, ry: (nx - 0.5) * 9 });
+    setGlow({ x: nx * 100, y: ny * 100 });
+  }, []);
+
+  const onLeaveCard = useCallback(() => {
+    setTilt({ rx: 0, ry: 0 });
+    setGlow({ x: 50, y: 50 });
+    setActive(false);
+    onLeave?.();
+  }, [onLeave]);
+
+  const onEnterCard = useCallback(() => {
+    setActive(true);
+    onEnter?.();
+  }, [onEnter]);
+
+  return (
+    <div
+      ref={ref}
+      onMouseMove={onMove}
+      onMouseEnter={onEnterCard}
+      onMouseLeave={onLeaveCard}
+      style={{
+        transform: `perspective(900px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
+        transition: active ? "transform 0.06s linear, opacity 0.3s ease" : "transform 0.45s ease, opacity 0.3s ease",
+        opacity: dimmed ? 0.7 : 1,
+        position: "relative",
+      }}
+      className={className}
+    >
+      {active && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute", inset: 0,
+            borderRadius: "inherit",
+            background: `radial-gradient(circle at ${glow.x}% ${glow.y}%, hsl(var(--primary)/0.11) 0%, transparent 60%)`,
+            pointerEvents: "none",
+            zIndex: 2,
+          }}
+        />
+      )}
+      <div style={{ position: "relative", zIndex: 3 }}>{children}</div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O — Section flash on hash-nav
+// ─────────────────────────────────────────────────────────────────────────────
+function useSectionFlash() {
+  useEffect(() => {
+    const flash = () => {
+      const hash = window.location.hash.replace("#", "");
+      const section = document.getElementById(hash);
+      if (!section) return;
+      const h2 = section.querySelector<HTMLElement>("h2");
+      if (!h2) return;
+      h2.classList.remove("sec-flash");
+      void h2.offsetWidth; // reflow
+      h2.classList.add("sec-flash");
+    };
+    window.addEventListener("hashchange", flash);
+    return () => window.removeEventListener("hashchange", flash);
+  }, []);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// M — CTA Mail Trail
+// ─────────────────────────────────────────────────────────────────────────────
+const CTA_ENVS = [
+  { sx: "5%",  dur: "18s", del: "0s",   r: "-10deg", op: "0.08", dx: "30px",  size: 16 },
+  { sx: "20%", dur: "24s", del: "5s",   r: "7deg",   op: "0.06", dx: "-20px", size: 20 },
+  { sx: "38%", dur: "20s", del: "10s",  r: "-5deg",  op: "0.07", dx: "40px",  size: 14 },
+  { sx: "55%", dur: "16s", del: "2.5s", r: "12deg",  op: "0.05", dx: "-30px", size: 18 },
+  { sx: "70%", dur: "22s", del: "7.5s", r: "-8deg",  op: "0.08", dx: "25px",  size: 15 },
+  { sx: "84%", dur: "19s", del: "13s",  r: "5deg",   op: "0.06", dx: "-15px", size: 17 },
+];
+
+function CtaEnvelopes() {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
+      {CTA_ENVS.map((e, i) => (
+        <span
+          key={i}
+          className="env-cta-anim absolute bottom-4 text-white"
+          style={{
+            "--dur": e.dur,
+            "--del": e.del,
+            "--r": e.r,
+            "--op": e.op,
+            "--sx": e.sx,
+            "--dx": e.dx,
+          } as React.CSSProperties}
+        >
+          <Mail style={{ width: e.size, height: e.size, opacity: parseFloat(e.op) }} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Feature data
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 const ALL_FEATURES = [
   {
     icon: Send,
@@ -86,7 +430,7 @@ const ALL_FEATURES = [
   {
     icon: Filter,
     title: "Smart Segmentation",
-    desc: "Send the right message to the right people. Build precise audience segments using 8 filter types — no spreadsheets, no guesswork.",
+    desc: "Send the right message to the right people. Build precise audience segments using 8 filter types — available on every plan, no spreadsheets, no guesswork.",
     items: [
       "Filter by subscriber status (active, unsubscribed, bounced)",
       "Filter by list membership",
@@ -190,17 +534,17 @@ const ALL_FEATURES = [
   },
   {
     icon: Lock,
-    title: "Team, Access & Compliance",
-    desc: "Manage who can do what in your account. GDPR tools, audit logs, and role-based access keep your data safe and your team aligned.",
+    title: "Security & Access",
+    desc: "Your data stays on your server — always. Audit every action, control user access, and keep your email programme fully under your control.",
     items: [
-      "Invite team members to your workspace",
-      "Role-based access control (admin, editor, viewer)",
-      "Full activity audit log (Agency)",
-      "GDPR consent tracking and management (Pro+)",
-      "Subscriber data export on request",
-      "Right-to-erasure: delete subscriber data on demand",
-      "Secure password management",
-      "Session logging and access history",
+      "Full audit trail — every action logged (all plans)",
+      "Secure login with password protection",
+      "Self-hosted — data never leaves your server",
+      "Session management and access control",
+      "No third-party access to your subscriber data",
+      "Individual user accounts per installation",
+      "Multiple user accounts on Agency plan",
+      "Activity history per user",
     ],
   },
   {
@@ -214,15 +558,15 @@ const ALL_FEATURES = [
       "API-driven subscriber import and management",
       "Custom webhook endpoint per campaign or list",
       "Export all data in CSV or via API",
-      "Compatible with Zapier and n8n via webhooks",
+      "Send events to any URL in real time",
       "Use your existing SMTP — no migration needed",
     ],
   },
 ];
 
-// ─────────────────────────────────────────────────────────────
-// FeatureCard
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// FeatureCard — J (30ms stagger applied in parent)
+// ─────────────────────────────────────────────────────────────────────────────
 function FeatureCard({ feature }: { feature: (typeof ALL_FEATURES)[0] }) {
   const [expanded, setExpanded] = useState(false);
   const Icon = feature.icon;
@@ -235,44 +579,27 @@ function FeatureCard({ feature }: { feature: (typeof ALL_FEATURES)[0] }) {
           <Icon className="w-6 h-6" />
         </div>
         <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
-        <p className="text-muted-foreground text-sm mb-5 leading-relaxed flex-1">
-          {feature.desc}
-        </p>
+        <p className="text-muted-foreground text-sm mb-5 leading-relaxed flex-1">{feature.desc}</p>
         <ul className="space-y-2 mb-4">
           {preview.map((item) => (
-            <li
-              key={item}
-              className="flex items-start gap-2 text-sm text-muted-foreground"
-            >
+            <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
               <CheckCircle2 className="w-4 h-4 text-primary/60 flex-shrink-0 mt-0.5" />
               {item}
             </li>
           ))}
-          {expanded &&
-            rest.map((item) => (
-              <li
-                key={item}
-                className="flex items-start gap-2 text-sm text-muted-foreground"
-              >
-                <CheckCircle2 className="w-4 h-4 text-primary/60 flex-shrink-0 mt-0.5" />
-                {item}
-              </li>
-            ))}
+          {expanded && rest.map((item) => (
+            <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="w-4 h-4 text-primary/60 flex-shrink-0 mt-0.5" />
+              {item}
+            </li>
+          ))}
         </ul>
         {rest.length > 0 && (
           <button
             onClick={() => setExpanded(!expanded)}
             className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline self-start mt-auto"
           >
-            {expanded ? (
-              <>
-                <ChevronUp className="w-3.5 h-3.5" /> Show less
-              </>
-            ) : (
-              <>
-                <ChevronDown className="w-3.5 h-3.5" /> +{rest.length} more
-              </>
-            )}
+            {expanded ? <><ChevronUp className="w-3.5 h-3.5" /> Show less</> : <><ChevronDown className="w-3.5 h-3.5" /> +{rest.length} more</>}
           </button>
         )}
       </CardContent>
@@ -281,69 +608,70 @@ function FeatureCard({ feature }: { feature: (typeof ALL_FEATURES)[0] }) {
 }
 
 const fadeUp = {
-  initial: { opacity: 0, y: 24 },
+  initial: { opacity: 0, y: 22 },
   whileInView: { opacity: 1, y: 0 },
   viewport: { once: true },
-  transition: { duration: 0.55, ease: "easeOut" },
-};
-const stagger = {
-  whileInView: { transition: { staggerChildren: 0.08 } },
-  viewport: { once: true },
+  transition: { duration: 0.5, ease: "easeOut" },
 };
 
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // PAGE
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 export function Landing() {
+  useSectionFlash();
+
+  // H — track which path card is hovered
+  const [hoveredPath, setHoveredPath] = useState<"diy" | "managed" | null>(null);
+
   const licensePlans = [
     {
+      id: "starter",
       name: "Starter License",
-      price: "$49",
-      installs: "1 installation (server or domain)",
+      price: 49,
+      installs: 1,
+      installsLabel: "1",
       popular: true,
       features: [
         "1 server or domain installation",
-        "Multi-user shared workspace",
         "Campaign management",
         "Email builder (drag-and-drop, HTML, visual)",
-        "Subscriber management",
-        "Basic analytics",
-        "Suppression & unsubscribe management",
+        "Subscriber management & segmentation",
+        "Analytics & suppression management",
         "Send from your own domain",
         "Real-time webhooks",
+        "Full audit trail",
         "Lifetime software updates",
       ],
     },
     {
+      id: "pro",
       name: "Pro License",
-      price: "$149",
-      installs: "Up to 3 installations",
+      price: 149,
+      installs: 3,
+      installsLabel: "3",
       popular: false,
       features: [
         "Everything in Starter",
         "Up to 3 installations",
         "Automation workflows",
         "A/B testing",
-        "Advanced audience segmentation",
         "REST API access",
-        "Advanced reporting & CSV export",
-        "GDPR tools",
+        "Deliverability dashboard",
+        "CSV export & advanced reporting",
         "Lifetime software updates",
       ],
     },
     {
+      id: "agency",
       name: "Agency License",
-      price: "$299",
-      installs: "Unlimited installations",
+      price: 299,
+      installs: null,
+      installsLabel: "Unlimited",
       popular: false,
       features: [
         "Everything in Pro",
         "Unlimited installations",
-        "White label (remove ZeniPost branding)",
-        "Client usage rights",
-        "Full activity audit logs",
-        "Team roles & permissions",
-        "Advanced reporting",
+        "Multiple user accounts per install",
         "Lifetime software updates",
       ],
     },
@@ -352,7 +680,7 @@ export function Landing() {
   const supportPlans = [
     {
       name: "Basic Support",
-      price: "$19",
+      price: 19,
       period: "/month",
       badge: null,
       desc: "Best for beginners needing setup help",
@@ -365,7 +693,7 @@ export function Landing() {
     },
     {
       name: "Advanced Support",
-      price: "$49",
+      price: 49,
       period: "/month",
       badge: "Most Popular",
       desc: "Best for growing users with serious usage",
@@ -379,7 +707,8 @@ export function Landing() {
     },
     {
       name: "Managed Setup",
-      price: "$49–$99",
+      price: null,
+      priceLabel: "$49–$99",
       period: " one-time",
       badge: null,
       desc: "Full setup done for you, once",
@@ -393,45 +722,24 @@ export function Landing() {
   ];
 
   const deliveryPlans = [
-    {
-      name: "Starter Delivery",
-      price: "$35/mo",
-      volume: "55,000 emails/month",
-      infra: "Shared IP pool",
-      routing: "Basic routing",
-      Support: "Basic support Plan included",
-    },
-    {
-      name: "Growth Delivery",
-      price: "$87/mo",
-      volume: "150,000 emails/month",
-      infra: "Optimized routing",
-      routing: "Better inbox placement",
-      Support: "Advance support Plan included",
-    },
-    {
-      name: "Scale Delivery",
-      price: "$159/mo",
-      volume: "3,50,000 emails/month",
-      infra: "Priority queue",
-      routing: "Warmup system included",
-    },
-    {
-      name: "Dedicated IP",
-      price: "$299+/mo",
-      volume: "Custom email volume",
-      infra: "Dedicated IP",
-      routing: "Reputation management + scaling",
-    },
+    { name: "Starter Delivery", price: 35,  suffix: "/mo", volume: "55,000 emails/month",    infra: "Shared IP pool",    routing: "Basic routing" },
+    { name: "Growth Delivery",  price: 87,  suffix: "/mo", volume: "150,000 emails/month",   infra: "Optimized routing", routing: "Better inbox placement" },
+    { name: "Scale Delivery",   price: 159, suffix: "/mo", volume: "350,000 emails/month",   infra: "Priority queue",    routing: "Warmup system included" },
+    { name: "Dedicated IP",     price: 299, suffix: "+/mo",volume: "Custom email volume",    infra: "Dedicated IP",      routing: "Reputation management + scaling" },
   ];
 
   return (
     <PublicLayout>
+      <StyleInjector />
+      <CursorGlow />
+
       {/* ── HERO ── */}
       <section className="relative pt-24 pb-32 overflow-hidden">
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-primary/5 via-background to-background" />
+        {/* A — drifting envelopes */}
+        <HeroEnvelopes />
 
-        <div className="max-w-5xl mx-auto px-4 text-center">
+        <div className="max-w-5xl mx-auto px-4 text-center relative z-10">
           <motion.div
             {...fadeUp}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-8 border border-primary/20"
@@ -443,21 +751,34 @@ export function Landing() {
             ZeniPost v2.0 — now available
           </motion.div>
 
+          {/* C — word-by-word reveal on gradient line only */}
           <motion.h1
-            {...fadeUp}
-            transition={{ duration: 0.6, delay: 0.05 }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.05 }}
             className="text-5xl md:text-7xl font-display font-extrabold leading-[1.08] tracking-tight mb-4"
           >
             Run your own email infrastructure —
             <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-500">
-              without deliverability headaches
+            <span className="inline">
+              {GRADIENT_WORDS.map((word, i) => (
+                <motion.span
+                  key={i}
+                  initial="hidden"
+                  animate="visible"
+                  custom={i}
+                  variants={wordV}
+                  className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-500 inline-block mr-[0.22em] last:mr-0"
+                >
+                  {word}
+                </motion.span>
+              ))}
             </span>
           </motion.h1>
 
           <motion.p
             {...fadeUp}
-            transition={{ duration: 0.55, delay: 0.1 }}
+            transition={{ duration: 0.55, delay: 0.65 }}
             className="text-lg font-semibold text-muted-foreground mb-3"
           >
             Self-hosted. Your server. Your control.
@@ -465,7 +786,7 @@ export function Landing() {
 
           <motion.p
             {...fadeUp}
-            transition={{ duration: 0.55, delay: 0.15 }}
+            transition={{ duration: 0.55, delay: 0.72 }}
             className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10"
           >
             Install on your own server and send using your SMTP — or upgrade to
@@ -474,30 +795,22 @@ export function Landing() {
 
           <motion.div
             {...fadeUp}
-            transition={{ duration: 0.55, delay: 0.2 }}
+            transition={{ duration: 0.55, delay: 0.78 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6"
           >
             <Link href="#pricing">
-              <Button
-                size="lg"
-                className="gap-2 text-base px-8 h-12 w-full sm:w-auto"
-              >
+              <Button size="lg" className="gap-2 text-base px-8 h-12 w-full sm:w-auto">
                 Buy License <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
-            <Button
-              size="lg"
-              variant="outline"
-              className="text-base px-8 h-12 w-full sm:w-auto"
-            >
+            <Button size="lg" variant="outline" className="text-base px-8 h-12 w-full sm:w-auto">
               Get Managed Setup
             </Button>
           </motion.div>
 
-          {/* Trust line */}
           <motion.p
             {...fadeUp}
-            transition={{ duration: 0.5, delay: 0.25 }}
+            transition={{ duration: 0.5, delay: 0.85 }}
             className="text-sm text-muted-foreground/70 flex items-center justify-center gap-2"
           >
             <CheckCircle className="w-4 h-4 text-primary/50" />
@@ -506,44 +819,17 @@ export function Landing() {
         </div>
       </section>
 
-      {/* ── HOW IT WORKS ── */}
+      {/* ── HOW IT WORKS (E + F) ── */}
       <section id="how" className="py-16 bg-muted/20">
         <div className="max-w-5xl mx-auto px-4">
-          <motion.h2
-            {...fadeUp}
-            className="text-center text-2xl font-bold mb-10 text-muted-foreground"
-          >
+          <motion.h2 {...fadeUp} className="text-center text-2xl font-bold mb-10 text-muted-foreground">
             Up and running in 5 steps
           </motion.h2>
-          <motion.div
-            {...stagger}
-            className="grid grid-cols-2 md:grid-cols-5 gap-3"
-          >
-            {[
-              { step: "01", label: "Install on your server" },
-              { step: "02", label: "Create users (shared workspace)" },
-              { step: "03", label: "Connect SMTP (SES, SendGrid, etc.)" },
-              { step: "04", label: "Send your campaigns" },
-              { step: "05", label: "Upgrade delivery (optional)" },
-            ].map((s) => (
-              <motion.div key={s.step} {...fadeUp}>
-                <Card className="text-center hover:border-primary/40 transition-colors">
-                  <CardContent className="p-5">
-                    <p className="text-2xl font-extrabold text-primary/30 mb-1">
-                      {s.step}
-                    </p>
-                    <p className="text-sm font-medium leading-snug">
-                      {s.label}
-                    </p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </motion.div>
+          <StepCards />
         </div>
       </section>
 
-      {/* ── DIY vs MANAGED ── */}
+      {/* ── DIY vs MANAGED (G + H) ── */}
       <section className="py-20">
         <div className="max-w-5xl mx-auto px-4">
           <motion.div {...fadeUp} className="text-center mb-12">
@@ -558,96 +844,98 @@ export function Landing() {
           <div className="grid md:grid-cols-2 gap-6">
             {/* DIY */}
             <motion.div {...fadeUp}>
-              <Card className="h-full">
-                <CardContent className="p-8">
-                  <div className="flex items-center gap-3 mb-5">
-                    <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
-                      <Server className="w-5 h-5 text-muted-foreground" />
+              <TiltCard
+                dimmed={hoveredPath === "managed"}
+                onEnter={() => setHoveredPath("diy")}
+                onLeave={() => setHoveredPath(null)}
+              >
+                <Card className="h-full">
+                  <CardContent className="p-8">
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+                        <Server className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold">DIY (Free Path)</h3>
+                        <p className="text-xs text-muted-foreground">Bring your own SMTP</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold">DIY (Free Path)</h3>
-                      <p className="text-xs text-muted-foreground">
-                        Bring your own SMTP
-                      </p>
-                    </div>
-                  </div>
-                  <ul className="space-y-3 text-sm text-muted-foreground mb-6">
-                    {[
-                      "Use your own SMTP (SES, SendGrid…)",
-                      "Lowest cost at scale",
-                      "Full provider control",
-                      "Manual setup and management",
-                      "Basic tracking & webhooks",
-                    ].map((item) => (
-                      <li key={item} className="flex items-start gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-primary/40 flex-shrink-0 mt-0.5" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                  <Link href="/register">
-                    <Button variant="outline" className="w-full">
-                      Start Free (BYOS)
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+                    <ul className="space-y-3 text-sm text-muted-foreground mb-6">
+                      {[
+                        "Use your own SMTP (SES, SendGrid…)",
+                        "Lowest cost at scale",
+                        "Full provider control",
+                        "Manual setup and management",
+                        "Basic tracking & webhooks",
+                      ].map((item) => (
+                        <li key={item} className="flex items-start gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-primary/40 flex-shrink-0 mt-0.5" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                    <Link href="/register">
+                      <Button variant="outline" className="w-full">Start Free (BYOS)</Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              </TiltCard>
             </motion.div>
 
             {/* Managed */}
             <motion.div {...fadeUp} transition={{ duration: 0.55, delay: 0.1 }}>
-              <Card className="h-full border-primary shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary to-blue-500" />
-                <CardContent className="p-8">
-                  <div className="flex items-center gap-3 mb-5">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Wifi className="w-5 h-5 text-primary" />
+              <TiltCard
+                dimmed={hoveredPath === "diy"}
+                onEnter={() => setHoveredPath("managed")}
+                onLeave={() => setHoveredPath(null)}
+              >
+                <Card className="h-full border-primary shadow-xl relative overflow-hidden">
+                  <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary to-blue-500" />
+                  <CardContent className="p-8">
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                        <Wifi className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold">Managed (Recommended)</h3>
+                        <p className="text-xs text-primary font-semibold">Best for inbox placement</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold">
-                        Managed (Recommended)
-                      </h3>
-                      <p className="text-xs text-primary font-semibold">
-                        Best for inbox placement
-                      </p>
-                    </div>
-                  </div>
-                  <ul className="space-y-3 text-sm text-muted-foreground mb-6">
-                    {[
-                      "Better inbox placement rates",
-                      "Optimized routing infrastructure",
-                      "Dedicated IP provisioning",
-                      "IP warmup management",
-                      "Full reputation monitoring",
-                    ].map((item) => (
-                      <li key={item} className="flex items-start gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button className="w-full gap-2">
-                    Get Managed Setup <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </CardContent>
-              </Card>
+                    <ul className="space-y-3 text-sm text-muted-foreground mb-6">
+                      {[
+                        "Better inbox placement rates",
+                        "Optimized routing infrastructure",
+                        "Dedicated IP provisioning",
+                        "IP warmup management",
+                        "Full reputation monitoring",
+                      ].map((item) => (
+                        <li key={item} className="flex items-start gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button className="w-full gap-2">
+                      Get Managed Setup <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TiltCard>
             </motion.div>
           </div>
         </div>
       </section>
 
-      {/* ── FULL FEATURE SET ── */}
+      {/* ── FULL FEATURE SET (J) ── */}
       <section id="features" className="py-24 bg-muted/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            {...fadeUp}
-            className="text-center max-w-3xl mx-auto mb-16"
-          >
+          <motion.div {...fadeUp} className="text-center max-w-3xl mx-auto mb-16">
             <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider mb-4 border border-primary/20">
               Complete Feature Set
             </span>
             <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">
-              12 categories. 96+ features.
+              <CUp n={12} cls="tabular-nums" /> categories.{" "}
+              <CUp n={96} suf="+" cls="tabular-nums" /> features.
             </h2>
             <p className="text-lg text-muted-foreground">
               Everything you need to run a professional email programme —
@@ -656,32 +944,34 @@ export function Landing() {
             </p>
           </motion.div>
 
+          {/* K — CountUp stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-16">
             {[
-              { value: "12", label: "Feature Categories" },
-              { value: "96+", label: "Individual Features" },
-              { value: "4", label: "Email Providers" },
-              { value: "1", label: "One unified system" },
+              { n: 12,  suf: "",  label: "Feature Categories" },
+              { n: 96,  suf: "+", label: "Individual Features" },
+              { n: 4,   suf: "",  label: "Email Providers" },
+              { n: 1,   suf: "",  label: "One unified system" },
             ].map((stat) => (
               <motion.div key={stat.label} {...fadeUp}>
                 <div className="bg-background rounded-xl border border-border p-5 text-center">
                   <p className="text-3xl font-extrabold text-primary">
-                    {stat.value}
+                    <CUp n={stat.n} suf={stat.suf} cls="tabular-nums" />
                   </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {stat.label}
-                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">{stat.label}</p>
                 </div>
               </motion.div>
             ))}
           </div>
 
+          {/* J — 30ms stagger */}
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {ALL_FEATURES.map((feature, i) => (
               <motion.div
                 key={feature.title}
-                {...fadeUp}
-                transition={{ duration: 0.5, delay: i * 0.04 }}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.45, delay: i * 0.03, ease: "easeOut" }}
               >
                 <FeatureCard feature={feature} />
               </motion.div>
@@ -708,47 +998,29 @@ export function Landing() {
                 icon: Code2,
                 title: "Developers",
                 desc: "Running your own infrastructure and tired of expensive SaaS email platforms with usage-based pricing that adds up fast.",
-                points: [
-                  "Self-host on any VPS or cloud",
-                  "Full API access",
-                  "No per-email charges on your tier",
-                ],
+                points: ["Self-host on any VPS or cloud", "Full API access", "No per-email charges on your tier"],
               },
               {
                 icon: Briefcase,
                 title: "Agencies",
-                desc: "Managing email campaigns across multiple clients and needing a single platform with team access and white-label support.",
-                points: [
-                  "Unlimited installs (Agency license)",
-                  "White-label branding",
-                  "Client usage permitted",
-                ],
+                desc: "Managing email campaigns across multiple clients and needing a single platform you can install anywhere, as many times as you need.",
+                points: ["Unlimited installs (Agency license)", "Multiple user accounts per install", "Full automation and API access"],
               },
               {
                 icon: Building2,
                 title: "Businesses",
                 desc: "Needing complete control over subscriber data, compliance, and deliverability without depending on third-party providers.",
-                points: [
-                  "Data stays on your server",
-                  "Full audit trail",
-                  "Managed delivery available",
-                ],
+                points: ["Data stays on your server", "Full audit trail", "Managed delivery available"],
               },
             ].map((item, i) => (
-              <motion.div
-                key={item.title}
-                {...fadeUp}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-              >
+              <motion.div key={item.title} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }}>
                 <Card className="h-full text-left hover:shadow-lg transition-shadow">
                   <CardContent className="p-7">
                     <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center text-primary mb-4">
                       <item.icon className="w-6 h-6" />
                     </div>
                     <h3 className="text-lg font-bold mb-2">{item.title}</h3>
-                    <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                      {item.desc}
-                    </p>
+                    <p className="text-sm text-muted-foreground mb-4 leading-relaxed">{item.desc}</p>
                     <ul className="space-y-1.5">
                       {item.points.map((p) => (
                         <li key={p} className="flex items-center gap-2 text-sm">
@@ -765,7 +1037,7 @@ export function Landing() {
         </div>
       </section>
 
-      {/* ── PRICING ── */}
+      {/* ── PRICING (K + L) ── */}
       <section id="pricing" className="py-24 bg-muted/20">
         <div className="max-w-6xl mx-auto px-4">
           <motion.div {...fadeUp} className="text-center mb-12">
@@ -776,8 +1048,7 @@ export function Landing() {
               Choose your license. Pay once. Use forever.
             </h2>
             <p className="text-muted-foreground text-lg">
-              Use your own SMTP or upgrade to managed delivery anytime. No
-              monthly fees on the software.
+              Use your own SMTP or upgrade to managed delivery anytime. No monthly fees on the software.
             </p>
           </motion.div>
 
@@ -788,76 +1059,75 @@ export function Landing() {
                 {...fadeUp}
                 transition={{ duration: 0.5, delay: i * 0.1 }}
               >
-                <Card
-                  className={cn(
-                    "relative overflow-hidden h-full",
-                    plan.popular
-                      ? "border-primary shadow-2xl scale-[1.03]"
-                      : "hover:border-primary/30 transition-colors",
-                  )}
+                {/* L — float loop on popular card */}
+                <motion.div
+                  animate={plan.popular ? { y: [0, -2, 0] } : {}}
+                  transition={plan.popular ? { duration: 4, ease: "easeInOut", repeat: Infinity } : {}}
                 >
-                  {plan.popular && (
-                    <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary to-blue-500" />
-                  )}
-                  {plan.popular && (
-                    <div className="absolute top-4 right-4">
-                      <span className="text-xs font-bold bg-primary/10 text-primary px-3 py-1 rounded-full">
-                        Most Popular
-                      </span>
-                    </div>
-                  )}
-                  <CardContent className="p-8 flex flex-col h-full">
-                    <h3 className="text-xl font-bold mb-2">{plan.name}</h3>
-                    <p className="text-4xl font-extrabold mb-1">{plan.price}</p>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      one-time
-                    </p>
-                    <div className="text-sm bg-muted/50 rounded-lg px-3 py-2 mb-5 space-y-1">
-                      <p>
-                        <span className="text-muted-foreground">
-                          Installations:
-                        </span>{" "}
-                        <strong>{plan.installs}</strong>
+                  <Card
+                    className={cn(
+                      "relative overflow-hidden h-full",
+                      plan.popular
+                        ? "border-primary shadow-2xl scale-[1.03]"
+                        : "hover:border-primary/30 transition-colors",
+                    )}
+                  >
+                    {plan.popular && (
+                      <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary to-blue-500" />
+                    )}
+                    {plan.popular && (
+                      <div className="absolute top-4 right-4">
+                        <span className="text-xs font-bold bg-primary/10 text-primary px-3 py-1 rounded-full">
+                          Most Popular
+                        </span>
+                      </div>
+                    )}
+                    <CardContent className="p-8 flex flex-col h-full">
+                      <h3 className="text-xl font-bold mb-2">{plan.name}</h3>
+                      {/* K — CountUp price */}
+                      <p className="text-4xl font-extrabold mb-1">
+                        $<CUp n={plan.price} cls="tabular-nums" />
                       </p>
-                      <p className="text-primary/80 font-medium">
-                        Includes lifetime updates. Paid support available if
-                        needed.
-                      </p>
-                    </div>
-                    <ul className="space-y-2.5 flex-1 mb-7">
-                      {plan.features.map((f) => (
-                        <li key={f} className="flex items-start gap-2 text-sm">
-                          <CheckCircle2 className="w-4 h-4 text-primary/60 flex-shrink-0 mt-0.5" />
-                          {f}
-                        </li>
-                      ))}
-                    </ul>
-                    <Link href="/register">
-                      <Button
-                        variant={plan.popular ? "default" : "outline"}
-                        className="w-full"
-                      >
-                        Get {plan.name}
-                      </Button>
-                    </Link>
-                  </CardContent>
-                </Card>
+                      <p className="text-sm text-muted-foreground mb-2">one-time</p>
+                      <div className="text-sm bg-muted/50 rounded-lg px-3 py-2 mb-5 space-y-1">
+                        <p>
+                          <span className="text-muted-foreground">Installations:</span>{" "}
+                          <strong>
+                            {plan.installs !== null
+                              ? <><CUp n={plan.installs} cls="tabular-nums" /></>
+                              : "Unlimited"}
+                          </strong>
+                        </p>
+                        <p className="text-primary/80 font-medium">
+                          Includes lifetime updates. Paid support available if needed.
+                        </p>
+                      </div>
+                      <ul className="space-y-2.5 flex-1 mb-7">
+                        {plan.features.map((f) => (
+                          <li key={f} className="flex items-start gap-2 text-sm">
+                            <CheckCircle2 className="w-4 h-4 text-primary/60 flex-shrink-0 mt-0.5" />
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
+                      <Link href="/register">
+                        <Button variant={plan.popular ? "default" : "outline"} className="w-full">
+                          Get {plan.name}
+                        </Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                </motion.div>
               </motion.div>
             ))}
           </div>
 
-          {/* Disclaimer + upgrade hook */}
-          <motion.div
-            {...fadeUp}
-            className="mt-10 max-w-xl mx-auto text-center space-y-2"
-          >
+          <motion.div {...fadeUp} className="mt-10 max-w-xl mx-auto text-center space-y-2">
             <p className="text-sm font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg px-4 py-2">
-              Support is not included with the license. Paid support plans are
-              available if you need assistance.
+              Support is not included with the license. Paid support plans are available if you need assistance.
             </p>
             <p className="text-xs text-muted-foreground italic">
-              Most users start with their own SMTP and upgrade to managed
-              delivery as they scale.
+              Most users start with their own SMTP and upgrade to managed delivery as they scale.
             </p>
           </motion.div>
         </div>
@@ -874,48 +1144,38 @@ export function Landing() {
               Need help setting things up?
             </h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              ZeniPost is self-hosted. If you need help with setup,
-              configuration, or troubleshooting, choose a support plan.
+              ZeniPost is self-hosted. If you need help with setup, configuration, or troubleshooting, choose a support plan.
             </p>
           </motion.div>
 
           <div className="grid md:grid-cols-3 gap-6 items-start">
             {supportPlans.map((plan, i) => (
-              <motion.div
-                key={plan.name}
-                {...fadeUp}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-              >
+              <motion.div key={plan.name} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.1 }}>
                 <Card
                   className={cn(
                     "relative overflow-hidden h-full",
-                    plan.badge
-                      ? "border-primary shadow-xl scale-[1.02]"
-                      : "hover:border-primary/30 transition-colors",
+                    plan.badge ? "border-primary shadow-xl scale-[1.02]" : "hover:border-primary/30 transition-colors",
                   )}
                 >
-                  {plan.badge && (
-                    <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary to-blue-500" />
-                  )}
+                  {plan.badge && <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary to-blue-500" />}
                   {plan.badge && (
                     <div className="absolute top-4 right-4">
-                      <span className="text-xs font-bold bg-primary/10 text-primary px-3 py-1 rounded-full">
-                        {plan.badge}
-                      </span>
+                      <span className="text-xs font-bold bg-primary/10 text-primary px-3 py-1 rounded-full">{plan.badge}</span>
                     </div>
                   )}
                   <CardContent className="p-8 flex flex-col h-full">
                     <h3 className="text-xl font-bold mb-1">{plan.name}</h3>
-                    <p className="text-xs text-muted-foreground mb-4">
-                      {plan.desc}
-                    </p>
+                    <p className="text-xs text-muted-foreground mb-4">{plan.desc}</p>
                     <div className="mb-5">
+                      {/* K — CountUp for support prices */}
                       <span className="text-4xl font-extrabold">
-                        {plan.price}
+                        {plan.price !== null ? (
+                          <><span>$</span><CUp n={plan.price as number} cls="tabular-nums" /></>
+                        ) : (
+                          (plan as any).priceLabel
+                        )}
                       </span>
-                      <span className="text-muted-foreground text-sm">
-                        {plan.period}
-                      </span>
+                      <span className="text-muted-foreground text-sm">{plan.period}</span>
                     </div>
                     <ul className="space-y-2.5 flex-1 mb-7">
                       {plan.features.map((f) => (
@@ -925,10 +1185,7 @@ export function Landing() {
                         </li>
                       ))}
                     </ul>
-                    <Button
-                      variant={plan.badge ? "default" : "outline"}
-                      className="w-full"
-                    >
+                    <Button variant={plan.badge ? "default" : "outline"} className="w-full">
                       Get {plan.name}
                     </Button>
                   </CardContent>
@@ -939,7 +1196,7 @@ export function Landing() {
         </div>
       </section>
 
-      {/* ── MANAGED DELIVERY ── */}
+      {/* ── MANAGED DELIVERY (K) ── */}
       <section className="py-24 bg-muted/20">
         <div className="max-w-7xl mx-auto px-4">
           <motion.div {...fadeUp} className="text-center mb-12">
@@ -950,37 +1207,24 @@ export function Landing() {
               Increase inbox placement, reduce spam issues, and scale safely.
             </p>
             <p className="text-sm text-muted-foreground">
-              Add optimized email infrastructure on top of your ZeniPost
-              license.
+              Add optimized email infrastructure on top of your ZeniPost license.
             </p>
           </motion.div>
 
           <div className="grid md:grid-cols-4 gap-5 mb-10">
             {deliveryPlans.map((plan, i) => (
-              <motion.div
-                key={plan.name}
-                {...fadeUp}
-                transition={{ duration: 0.5, delay: i * 0.08 }}
-              >
+              <motion.div key={plan.name} {...fadeUp} transition={{ duration: 0.5, delay: i * 0.08 }}>
                 <Card className="h-full hover:shadow-lg hover:border-primary/30 transition-all">
                   <CardContent className="p-6">
                     <h3 className="font-bold text-base mb-1">{plan.name}</h3>
+                    {/* K — CountUp delivery prices */}
                     <p className="text-2xl font-extrabold text-primary mb-3">
-                      {plan.price}
+                      $<CUp n={plan.price} cls="tabular-nums" />{plan.suffix}
                     </p>
                     <div className="space-y-1.5 text-sm text-muted-foreground">
-                      <p className="flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5" />
-                        {plan.volume}
-                      </p>
-                      <p className="flex items-center gap-1.5">
-                        <Server className="w-3.5 h-3.5" />
-                        {plan.infra}
-                      </p>
-                      <p className="flex items-center gap-1.5">
-                        <TrendingUp className="w-3.5 h-3.5" />
-                        {plan.routing}
-                      </p>
+                      <p className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" />{plan.volume}</p>
+                      <p className="flex items-center gap-1.5"><Server className="w-3.5 h-3.5" />{plan.infra}</p>
+                      <p className="flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" />{plan.routing}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -996,9 +1240,12 @@ export function Landing() {
         </div>
       </section>
 
-      {/* ── FINAL CTA ── */}
-      <section className="py-24 bg-foreground text-background text-center">
-        <div className="max-w-4xl mx-auto px-4">
+      {/* ── FINAL CTA (M + N) ── */}
+      <section className="relative py-24 bg-foreground text-background text-center overflow-hidden">
+        {/* M — mail trail */}
+        <CtaEnvelopes />
+
+        <div className="max-w-4xl mx-auto px-4 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -1008,31 +1255,30 @@ export function Landing() {
             <h2 className="text-4xl md:text-5xl font-display font-bold mb-5">
               Start free with your own SMTP —
               <br className="hidden sm:block" />
-              <span className="text-primary">
+              {/* N — flicker on view-enter */}
+              <motion.span
+                className="text-primary srv-flicker"
+                initial={{ opacity: 1 }}
+                whileInView={{ opacity: [1, 0.3, 1, 0.35, 1, 1] }}
+                viewport={{ once: true }}
+                transition={{ duration: 1.2, delay: 0.5, times: [0, 0.15, 0.3, 0.45, 0.6, 1] }}
+              >
                 or let us handle your entire email infrastructure.
-              </span>
+              </motion.span>
             </h2>
             <p className="text-xl text-background/70 mb-3">
-              Buy once. Get lifetime updates. Pay only if you need help or
-              delivery.
+              Buy once. Get lifetime updates. Pay only if you need help or delivery.
             </p>
             <p className="text-sm text-background/50 mb-10">
               Your data. Your server. Your rules.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/register">
-                <Button
-                  size="lg"
-                  className="bg-white text-foreground hover:bg-white/90 text-base px-8 h-12 w-full sm:w-auto"
-                >
+                <Button size="lg" className="bg-white text-foreground hover:bg-white/90 text-base px-8 h-12 w-full sm:w-auto">
                   Start Free
                 </Button>
               </Link>
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-white/30 text-white hover:bg-white/10 text-base px-8 h-12 w-full sm:w-auto"
-              >
+              <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 text-base px-8 h-12 w-full sm:w-auto">
                 Get Setup Done For Me
               </Button>
             </div>

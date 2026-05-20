@@ -5,11 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle, Badge, Button, Input, Label, 
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { CheckCircle2, Check, Minus, Edit2 } from "lucide-react";
 
-// Maps directly to feature-flags.ts — the canonical source of truth for the email app.
-// Starter = campaign_management, template_editors, subscriber_management, analytics_basic,
-//           suppression_list, custom_domains, webhooks
-// Pro adds = automation, ab_testing, segmentation_advanced, api_access, analytics_advanced, gdpr_tools
-// Agency adds = white_label, client_usage, audit_logs, team_roles
+// Feature matrix — verified against actual email app code:
+//   App.jsx (which routes use FeatureGate)
+//   FeatureGate.jsx (which keys are gated)
+//   license.py _PLAN_DEFAULTS + _V2_FLAG_MAP
+//
+// ALL plans  → campaigns, email builder, subscribers, analytics, suppression,
+//              custom_domains, webhooks, segmentation (default=True all plans),
+//              audit_trail (default=True all plans)
+// Pro+       → automation, ab_testing, api_access, deliverability_dashboard
 const FEATURE_MATRIX = [
   // ── All plans ─────────────────────────────────────────────────────────────
   { label: "Campaign Management",         starter: true,  pro: true,  agency: true,  note: "" },
@@ -19,18 +23,13 @@ const FEATURE_MATRIX = [
   { label: "Suppression Management",      starter: true,  pro: true,  agency: true,  note: "" },
   { label: "Custom Sending Domains",      starter: true,  pro: true,  agency: true,  note: "" },
   { label: "Webhooks",                    starter: true,  pro: true,  agency: true,  note: "" },
+  { label: "Audience Segmentation",       starter: true,  pro: true,  agency: true,  note: "Segment by any field or tag" },
+  { label: "Audit Trail",                 starter: true,  pro: true,  agency: true,  note: "Full activity history" },
   // ── Pro & Agency ──────────────────────────────────────────────────────────
   { label: "Automation Workflows",        starter: false, pro: true,  agency: true,  note: "" },
   { label: "A/B Testing",                 starter: false, pro: true,  agency: true,  note: "" },
-  { label: "Advanced Segmentation",       starter: false, pro: true,  agency: true,  note: "" },
   { label: "API Access",                  starter: false, pro: true,  agency: true,  note: "" },
-  { label: "Advanced Reporting",          starter: false, pro: true,  agency: true,  note: "" },
-  { label: "GDPR Tools",                  starter: false, pro: true,  agency: true,  note: "" },
-  // ── Agency only ───────────────────────────────────────────────────────────
-  { label: "White Label",                 starter: false, pro: false, agency: true,  note: "Remove all ZeniPost branding" },
-  { label: "Client Usage Rights",         starter: false, pro: false, agency: true,  note: "Let your clients use the install" },
-  { label: "Audit Logs",                  starter: false, pro: false, agency: true,  note: "" },
-  { label: "Team Roles & Permissions",    starter: false, pro: false, agency: true,  note: "" },
+  { label: "Deliverability Dashboard",    starter: false, pro: true,  agency: true,  note: "Inbox placement & reputation" },
 ];
 
 export function Plans() {
@@ -42,7 +41,7 @@ export function Plans() {
       <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold">Plans & Pricing</h1>
-                  <p className="text-muted-foreground mt-1">One-time software license pricing and included capabilities.</p>
+          <p className="text-muted-foreground mt-1">One-time software license pricing and included capabilities.</p>
         </div>
         <Button onClick={() => data?.plans?.[0] && setEditingPlan(data.plans[0])}>
           <Edit2 className="w-4 h-4" />Edit Plans
@@ -152,22 +151,13 @@ export function Plans() {
                 </thead>
                 <tbody className="divide-y divide-border/40">
                   {FEATURE_MATRIX.map((row, i) => {
-                    // Section divider rows
-                    const isAgencyStart = i === 14;
-                    const isProStart    = i === 7;
+                    const isProStart = i === 9; // Automation Workflows
                     return (
                       <>
                         {isProStart && (
                           <tr key="pro-divider">
                             <td colSpan={4} className="px-6 py-2 bg-primary/5 text-[10px] font-bold text-primary uppercase tracking-widest">
-                              Pro & Agency
-                            </td>
-                          </tr>
-                        )}
-                        {isAgencyStart && (
-                          <tr key="agency-divider">
-                            <td colSpan={4} className="px-6 py-2 bg-purple-500/5 text-[10px] font-bold text-purple-600 uppercase tracking-widest">
-                              Agency Only
+                              Pro &amp; Agency
                             </td>
                           </tr>
                         )}
