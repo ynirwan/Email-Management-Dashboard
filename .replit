@@ -35,3 +35,6 @@ externalPort = 3000
 
 [userenv.shared]
 JWT_SECRET = "c0ae95e70819a235088a8e3f10916afd0f659c045b5beb141703099d59022f60b8821106976c65be8bdf2debb859f055"
+
+[nix]
+channel = "stable-25_05"
