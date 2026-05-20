@@ -5,17 +5,32 @@ import { Card, CardContent, CardHeader, CardTitle, Badge, Button, Input, Label, 
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { CheckCircle2, Check, Minus, Edit2 } from "lucide-react";
 
+// Maps directly to feature-flags.ts — the canonical source of truth for the email app.
+// Starter = campaign_management, template_editors, subscriber_management, analytics_basic,
+//           suppression_list, custom_domains, webhooks
+// Pro adds = automation, ab_testing, segmentation_advanced, api_access, analytics_advanced, gdpr_tools
+// Agency adds = white_label, client_usage, audit_logs, team_roles
 const FEATURE_MATRIX = [
-  { label: "Campaign Manager",            starter: true,  pro: true,  agency: true  },
-  { label: "Template Editors",            starter: true,  pro: true,  agency: true  },
-  { label: "Subscriber Management",       starter: true,  pro: true,  agency: true  },
-  { label: "A/B Testing",                 starter: false, pro: true,  agency: true  },
-  { label: "Automation Workflows",        starter: false, pro: true,  agency: true  },
-  { label: "Advanced Segmentation",       starter: false, pro: true,  agency: true  },
-  { label: "API + Webhooks",              starter: false, pro: true,  agency: true  },
-  { label: "White Label",                 starter: false, pro: false, agency: true  },
-  { label: "Audit Logs",                  starter: false, pro: false, agency: true  },
-  { label: "Team Roles & Permissions",    starter: false, pro: false, agency: true  },
+  // ── All plans ─────────────────────────────────────────────────────────────
+  { label: "Campaign Management",         starter: true,  pro: true,  agency: true,  note: "" },
+  { label: "Email Builder (all editors)", starter: true,  pro: true,  agency: true,  note: "" },
+  { label: "Subscriber Management",       starter: true,  pro: true,  agency: true,  note: "" },
+  { label: "Basic Analytics",             starter: true,  pro: true,  agency: true,  note: "" },
+  { label: "Suppression Management",      starter: true,  pro: true,  agency: true,  note: "" },
+  { label: "Custom Sending Domains",      starter: true,  pro: true,  agency: true,  note: "" },
+  { label: "Webhooks",                    starter: true,  pro: true,  agency: true,  note: "" },
+  // ── Pro & Agency ──────────────────────────────────────────────────────────
+  { label: "Automation Workflows",        starter: false, pro: true,  agency: true,  note: "" },
+  { label: "A/B Testing",                 starter: false, pro: true,  agency: true,  note: "" },
+  { label: "Advanced Segmentation",       starter: false, pro: true,  agency: true,  note: "" },
+  { label: "API Access",                  starter: false, pro: true,  agency: true,  note: "" },
+  { label: "Advanced Reporting",          starter: false, pro: true,  agency: true,  note: "" },
+  { label: "GDPR Tools",                  starter: false, pro: true,  agency: true,  note: "" },
+  // ── Agency only ───────────────────────────────────────────────────────────
+  { label: "White Label",                 starter: false, pro: false, agency: true,  note: "Remove all ZeniPost branding" },
+  { label: "Client Usage Rights",         starter: false, pro: false, agency: true,  note: "Let your clients use the install" },
+  { label: "Audit Logs",                  starter: false, pro: false, agency: true,  note: "" },
+  { label: "Team Roles & Permissions",    starter: false, pro: false, agency: true,  note: "" },
 ];
 
 export function Plans() {
@@ -115,34 +130,65 @@ export function Plans() {
           {/* Feature Matrix */}
           <Card className="border-border/50">
             <CardHeader>
-              <CardTitle>Feature Matrix</CardTitle>
-              <p className="text-sm text-muted-foreground">What's included in each plan</p>
+              <CardTitle>Feature Comparison</CardTitle>
+              <p className="text-sm text-muted-foreground">Exactly what's included in each plan — no surprises</p>
             </CardHeader>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b border-border/50 bg-muted/30">
                   <tr>
-                    <th className="px-6 py-3 text-left font-semibold text-muted-foreground text-xs uppercase tracking-wider">Feature</th>
-                    {["Starter", "Pro", "Agency"].map((p) => (
-                      <th key={p} className="px-6 py-3 text-center font-semibold text-xs uppercase tracking-wider text-muted-foreground">{p}</th>
+                    <th className="px-6 py-3 text-left font-semibold text-muted-foreground text-xs uppercase tracking-wider w-1/2">Feature</th>
+                    {[
+                      { label: "Starter", sub: "$49" },
+                      { label: "Pro",     sub: "$149" },
+                      { label: "Agency",  sub: "$299" },
+                    ].map((p) => (
+                      <th key={p.label} className="px-4 py-3 text-center">
+                        <span className="block text-xs font-bold uppercase tracking-wider text-foreground">{p.label}</span>
+                        <span className="block text-xs text-muted-foreground font-normal">{p.sub} one-time</span>
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
-                  {FEATURE_MATRIX.map((row) => (
-                    <tr key={row.label} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-6 py-3 font-medium">{row.label}</td>
-                      {(["starter", "pro", "agency"] as const).map((plan) => (
-                        <td key={plan} className="px-6 py-3 text-center">
-                          {row[plan] ? (
-                            <Check className="w-4 h-4 text-primary mx-auto" />
-                          ) : (
-                            <Minus className="w-4 h-4 text-border mx-auto" />
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
+                  {FEATURE_MATRIX.map((row, i) => {
+                    // Section divider rows
+                    const isAgencyStart = i === 14;
+                    const isProStart    = i === 7;
+                    return (
+                      <>
+                        {isProStart && (
+                          <tr key="pro-divider">
+                            <td colSpan={4} className="px-6 py-2 bg-primary/5 text-[10px] font-bold text-primary uppercase tracking-widest">
+                              Pro & Agency
+                            </td>
+                          </tr>
+                        )}
+                        {isAgencyStart && (
+                          <tr key="agency-divider">
+                            <td colSpan={4} className="px-6 py-2 bg-purple-500/5 text-[10px] font-bold text-purple-600 uppercase tracking-widest">
+                              Agency Only
+                            </td>
+                          </tr>
+                        )}
+                        <tr key={row.label} className="hover:bg-muted/20 transition-colors">
+                          <td className="px-6 py-3">
+                            <span className="font-medium">{row.label}</span>
+                            {row.note && <span className="ml-2 text-xs text-muted-foreground">— {row.note}</span>}
+                          </td>
+                          {(["starter", "pro", "agency"] as const).map((plan) => (
+                            <td key={plan} className="px-4 py-3 text-center">
+                              {row[plan] ? (
+                                <Check className="w-4 h-4 text-primary mx-auto" />
+                              ) : (
+                                <Minus className="w-4 h-4 text-border mx-auto" />
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      </>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

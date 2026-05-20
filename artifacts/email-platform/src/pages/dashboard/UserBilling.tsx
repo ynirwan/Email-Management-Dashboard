@@ -80,6 +80,9 @@ function SubmitPaymentForm({ onSuccess }: { onSuccess: () => void }) {
       setError("Please enter a valid amount."); return;
     }
     if (!paymentMethod) { setError("Please select a payment method."); return; }
+    if (!transactionRef.trim() && !proofImageUrl) {
+      setError("Please provide a transaction reference ID or upload a payment screenshot — at least one is required."); return;
+    }
 
     mutation.mutate(
       {

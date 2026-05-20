@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
 import {
   DollarSign, TrendingUp, Clock, AlertCircle,
-  CheckCircle2, XCircle, MoreHorizontal, RefreshCw,
+  CheckCircle2, XCircle, MoreHorizontal,
   CreditCard, Image as ImageIcon, ChevronDown, ChevronUp,
 } from "lucide-react";
 
@@ -36,7 +36,7 @@ export function Billing() {
   const { toast }              = useToast();
   const [activeMenu, setActiveMenu]       = useState<number | null>(null);
   // Payment requests
-  const { data: prData, isLoading: prLoading } = useAdminPaymentRequests(1, 50, "pending");
+  const { data: prData, isLoading: prLoading, error: prError } = useAdminPaymentRequests(1, 50, "pending");
   const approveMutation  = useApprovePaymentRequest();
   const rejectMutation   = useRejectPaymentRequest();
   const [rejectingId, setRejectingId]     = useState<number | null>(null);
@@ -176,6 +176,11 @@ export function Billing() {
         <CardContent>
           {prLoading ? (
             <div className="flex justify-center py-6"><Spinner /></div>
+          ) : prError ? (
+            <div className="flex items-center gap-2 text-destructive text-sm py-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>Failed to load payment requests. Make sure the DB migration was applied (<code>cd lib/db && npm run push</code>).</span>
+            </div>
           ) : pendingRequests.length === 0 ? (
             <p className="text-sm text-muted-foreground py-2">No pending payment requests. All caught up!</p>
           ) : (

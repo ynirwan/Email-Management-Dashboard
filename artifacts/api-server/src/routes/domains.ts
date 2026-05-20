@@ -12,6 +12,7 @@ import { db, domainsTable, usersTable, licensesTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { PLAN_DEFINITIONS } from "./plans.js";
+import { PLAN_FEATURE_FLAGS } from "@workspace/db/schema/feature-flags.js";
 
 const router = Router();
 
@@ -160,7 +161,7 @@ router.post("/", requireAuth, async (req, res) => {
         plan:             userPlan,
         emailsPerMonth:   planDef?.emailsPerMonth   ?? 100000,
         subscribersLimit: planDef?.subscribersLimit ?? 25000,
-        features:         "[]",
+        features:         JSON.stringify(PLAN_FEATURE_FLAGS[userPlan] ?? PLAN_FEATURE_FLAGS["starter"]),
         signature:        "",
         expiresAt,
         // Locked until admin confirms payment and activates via PATCH /licenses/:id/activate

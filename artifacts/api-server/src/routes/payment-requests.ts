@@ -15,7 +15,7 @@ import {
   invoicesTable,
   paymentRequestsTable,
 } from "@workspace/db";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../lib/auth.js";
 import { buildLicensePayload } from "../lib/license-builder.js";
 import { PLAN_DEFINITIONS } from "./plans.js";
@@ -171,7 +171,7 @@ router.get("/admin", requireAdmin, async (req, res) => {
       const userIds = [...new Set(rows.map((r) => r.userId))];
       const users   = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, company: usersTable.company })
         .from(usersTable)
-        .where(sql`${usersTable.id} = ANY(${userIds})`);
+        .where(inArray(usersTable.id, userIds));
       const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
       requests = rows.map((r) => serializeRequest(r, userMap[r.userId]));
     }
