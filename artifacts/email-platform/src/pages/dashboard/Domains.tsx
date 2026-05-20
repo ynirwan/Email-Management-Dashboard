@@ -35,12 +35,14 @@ interface Domain {
   id: number;
   domain: string;
   rootDomain: string;
-  plan: string;
-  emailsPerMonth: number;
-  subscribersLimit: number;
-  status: "active" | "expiring" | "revoked" | "expired";
+  // License data — null when no license has been issued yet ("pending")
+  licenseId:        number | null;
+  plan:             string | null;
+  emailsPerMonth:   number | null;
+  subscribersLimit: number | null;
+  status: "active" | "expiring" | "revoked" | "expired" | "pending";
   isManaged: boolean;
-  expiresAt: string;
+  expiresAt: string | null;
   createdAt: string;
   lastPingAt: string | null;
 }
@@ -64,10 +66,7 @@ function daysUntil(dateStr: string) {
 // ── Status chip ───────────────────────────────────────────────────────────────
 
 function StatusChip({ status }: { status: Domain["status"] }) {
-  const map: Record<
-    Domain["status"],
-    { icon: any; label: string; cls: string }
-  > = {
+  const map: Record<string, { icon: any; label: string; cls: string }> = {
     active: {
       icon: CheckCircle2,
       label: "Active",
@@ -88,8 +87,19 @@ function StatusChip({ status }: { status: Domain["status"] }) {
       label: "Expired",
       cls: "text-muted-foreground bg-muted border-border",
     },
+    pending: {
+      icon: Clock,
+      label: "License Pending",
+      cls: "text-blue-600 bg-blue-500/10 border-blue-500/20",
+    },
   };
-  const { icon: Icon, label, cls } = map[status];
+  // Fallback for any unexpected/undefined status value
+  const entry = map[status] ?? {
+    icon: AlertTriangle,
+    label: status ?? "Unknown",
+    cls: "text-muted-foreground bg-muted border-border",
+  };
+  const { icon: Icon, label, cls } = entry;
   return (
     <span
       className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${cls}`}
@@ -119,11 +129,11 @@ function DomainCard({
 }: {
   domain: Domain;
   onDelete: (d: Domain) => void;
-  onDownload: (id: number) => void;
+  onDownload: (licenseId: number) => void;
   isDownloading: boolean;
 }) {
   const [copied, setCopied] = useState(false);
-  const days = daysUntil(domain.expiresAt);
+  const days = domain.expiresAt ? daysUntil(domain.expiresAt) : null;
 
   const copyDomain = () => {
     navigator.clipboard.writeText(domain.domain);
@@ -181,17 +191,17 @@ function DomainCard({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => onDownload(domain.id)}
-              disabled={isDownloading}
+              onClick={() => domain.licenseId != null && onDownload(domain.licenseId)}
+              disabled={isDownloading || domain.licenseId == null}
               className="gap-1.5 h-8 px-3 text-xs"
-              title="Download license file"
+              title={domain.licenseId == null ? "License not yet issued by admin" : "Download license file"}
             >
               {isDownloading ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <DownloadCloud className="w-3.5 h-3.5" />
               )}
-              License
+              {domain.licenseId == null ? "Pending" : "License"}
             </Button>
             <Button
               size="sm"
@@ -210,33 +220,37 @@ function DomainCard({
           <div>
             <p className="text-xs text-muted-foreground">Emails/mo limit</p>
             <p className="text-sm font-semibold">
-              {fmt(domain.emailsPerMonth)}
+              {domain.emailsPerMonth != null ? fmt(domain.emailsPerMonth) : "—"}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Subscriber limit</p>
             <p className="text-sm font-semibold">
-              {fmt(domain.subscribersLimit)}
+              {domain.subscribersLimit != null ? fmt(domain.subscribersLimit) : "—"}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">License expires</p>
             <p
               className={`text-sm font-semibold ${
-                days <= 0
-                  ? "text-destructive"
-                  : days <= 30
-                    ? "text-amber-600"
-                    : "text-foreground"
+                days == null
+                  ? "text-muted-foreground"
+                  : days <= 0
+                    ? "text-destructive"
+                    : days <= 30
+                      ? "text-amber-600"
+                      : "text-foreground"
               }`}
             >
-              {days <= 0
-                ? "Expired"
-                : days <= 30
-                  ? `${days}d left`
-                  : formatDistanceToNow(parseISO(domain.expiresAt), {
-                      addSuffix: true,
-                    })}
+              {days == null
+                ? "—"
+                : days <= 0
+                  ? "Expired"
+                  : days <= 30
+                    ? `${days}d left`
+                    : formatDistanceToNow(parseISO(domain.expiresAt!), {
+                        addSuffix: true,
+                      })}
             </p>
           </div>
           <div>
@@ -252,7 +266,7 @@ function DomainCard({
         </div>
 
         {/* Expiry warning */}
-        {days >= 0 && days <= 30 && (
+        {days != null && days >= 0 && days <= 30 && (
           <div className="mt-3 flex items-center gap-2 text-xs text-amber-600 bg-amber-500/5 border border-amber-400/30 px-3 py-2 rounded-lg">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             License expires in {days} day{days !== 1 ? "s" : ""}. Download a
@@ -457,19 +471,19 @@ export function Domains() {
     },
   });
 
-  // Download license
-  const handleDownload = async (domainId: number) => {
-    setDownloadingId(domainId);
+  // Download license — receives the licenseId from licensesTable (NOT the domain.id)
+  const handleDownload = async (licenseId: number) => {
+    setDownloadingId(licenseId);
     try {
-      const result = await fetchApi(`/api/portal/license/${domainId}/download`);
+      const result = await fetchApi(`/api/portal/license/${licenseId}/download`);
       const blob = new Blob([JSON.stringify(result, null, 2)], {
         type: "application/json",
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      const domainObj = domains.find((d) => d.id === domainId);
+      const domainObj = domains.find((d) => d.licenseId === licenseId);
       a.href = url;
-      a.download = `zenipost-license-${domainObj?.domain ?? domainId}.json`;
+      a.download = `zenipost-license-${domainObj?.domain ?? licenseId}.json`;
       a.click();
       URL.revokeObjectURL(url);
       toast({
@@ -595,7 +609,7 @@ export function Domains() {
               domain={d}
               onDelete={setDeletingDomain}
               onDownload={handleDownload}
-              isDownloading={downloadingId === d.id}
+              isDownloading={downloadingId === d.licenseId}
             />
           ))}
         </div>

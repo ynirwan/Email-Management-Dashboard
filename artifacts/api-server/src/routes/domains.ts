@@ -8,9 +8,10 @@
 //   - licenseKey column kept in DB for backwards compat but no longer exposed in new downloads
 
 import { Router } from "express";
-import { db, domainsTable, usersTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, domainsTable, usersTable, licensesTable } from "@workspace/db";
+import { eq, and, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
+import { PLAN_DEFINITIONS } from "./plans.js";
 
 const router = Router();
 
@@ -19,15 +20,72 @@ function parseIdParam(value: string | string[]): number {
   return parseInt(raw, 10);
 }
 
-// GET /api/domains — list domains for current user (admin sees all)
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+function toISO(v: any): string {
+  if (!v) return new Date().toISOString();
+  return v instanceof Date ? v.toISOString() : String(v);
+}
+
+function computeLicenseStatus(lic: any): "active" | "expiring" | "revoked" | "expired" {
+  if (lic.revokedAt) return "revoked";
+  const now     = Date.now();
+  const expires = new Date(lic.expiresAt).getTime();
+  if (expires < now) return "expired";
+  if ((expires - now) / (1000 * 60 * 60 * 24) <= 30) return "expiring";
+  return "active";
+}
+
+function computeRootDomain(domain: string): string {
+  const labels = domain.split(".");
+  return labels.length >= 2 ? labels.slice(-2).join(".") : domain;
+}
+
+// GET /api/domains — list domains for current user (admin sees all),
+// merged with license data from licensesTable keyed by domain name.
 router.get("/", requireAuth, async (req, res) => {
   try {
     const user = (req as any).user;
     const condition = user.role === "admin" ? undefined : eq(domainsTable.userId, user.id);
 
-    const domains = condition
+    const domainRows = condition
       ? await db.select().from(domainsTable).where(condition).orderBy(domainsTable.createdAt)
       : await db.select().from(domainsTable).orderBy(domainsTable.createdAt);
+
+    // Fetch matching licenses in one query, keyed by domain name
+    let licMap: Record<string, any> = {};
+    if (domainRows.length > 0) {
+      const names = domainRows.map((d) => d.domain);
+      const licRows = await db
+        .select()
+        .from(licensesTable)
+        .where(inArray(licensesTable.domain, names));
+      for (const l of licRows) licMap[l.domain] = l;
+    }
+
+    const domains = domainRows.map((d) => {
+      const lic = licMap[d.domain] ?? null;
+      return {
+        id:               d.id,
+        domain:           d.domain,
+        rootDomain:       lic?.rootDomain ?? "",
+        isVerified:       d.isVerified,
+        // License data — null when no license has been issued for this domain yet
+        licenseId:        lic?.id         ?? null,
+        plan:             lic?.plan        ?? null,
+        emailsPerMonth:   lic?.emailsPerMonth   ?? null,
+        subscribersLimit: lic?.subscribersLimit ?? null,
+        status:           lic ? computeLicenseStatus(lic) : "pending",
+        isManaged:        lic?.isManaged ?? false,
+        expiresAt:        lic?.expiresAt
+          ? toISO(lic.expiresAt)
+          : d.expiresAt
+            ? toISO(d.expiresAt)
+            : null,
+        lastPingAt:       lic?.lastPingAt ? toISO(lic.lastPingAt) : null,
+        createdAt:        toISO(d.createdAt),
+      };
+    });
 
     res.json({ domains });
   } catch (err) {
@@ -75,7 +133,42 @@ router.post("/", requireAuth, async (req, res) => {
       expiresAt,
     }).returning();
 
-    res.status(201).json({ domain: newDomain });
+    // Auto-create a license in licensesTable so the user can download immediately.
+    // Use the plan limits from the user's current subscription tier.
+    const userRows = await db.select().from(usersTable).where(eq(usersTable.id, user.id)).limit(1);
+    const fullUser = userRows[0];
+    const userPlan = (fullUser?.plan ?? "starter") as "starter" | "pro" | "agency";
+    const planDef  = PLAN_DEFINITIONS.find((p) => p.id === userPlan)
+                  ?? PLAN_DEFINITIONS.find((p) => p.id === "starter");
+
+    const rootDomain = computeRootDomain(cleanDomain);
+
+    // Only create a license if one doesn't already exist for this domain
+    const existingLic = await db
+      .select({ id: licensesTable.id })
+      .from(licensesTable)
+      .where(eq(licensesTable.domain, cleanDomain))
+      .limit(1);
+
+    let licenseId: number | null = null;
+    if (!existingLic[0]) {
+      const [newLic] = await db.insert(licensesTable).values({
+        customerId:       user.id,
+        domain:           cleanDomain,
+        rootDomain,
+        plan:             userPlan,
+        emailsPerMonth:   planDef?.emailsPerMonth   ?? 100000,
+        subscribersLimit: planDef?.subscribersLimit ?? 25000,
+        features:         "[]",
+        signature:        "",
+        expiresAt,
+      }).returning();
+      licenseId = newLic?.id ?? null;
+    } else {
+      licenseId = existingLic[0].id;
+    }
+
+    res.status(201).json({ domain: newDomain, licenseId });
   } catch (err) {
     console.error("Add domain error:", err);
     res.status(500).json({ error: "Internal Server Error", message: "Failed to add domain" });
