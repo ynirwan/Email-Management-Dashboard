@@ -12,6 +12,7 @@ import { AdminLogin }       from "@/pages/auth/AdminLogin";
 
 // ── User (non-admin) pages ────────────────────────────────────────────────────
 import { Overview }         from "@/pages/dashboard/Overview";       // NEW full version
+import { AdminOverview }    from "@/pages/dashboard/AdminOverview";
 import { UserLicenses }     from "@/pages/dashboard/UserLicenses";
 import { UserBilling }      from "@/pages/dashboard/UserBilling";
 import { Account }          from "@/pages/dashboard/Account";
@@ -38,6 +39,22 @@ import { useAuth } from "@/hooks/use-auth";
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
+
+function DashboardRoute() {
+  const { user, isLoading } = useAuth();
+  const [_, setLocation]    = useLocation();
+  if (isLoading)
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        Loading...
+      </div>
+    );
+  if (!user) {
+    setLocation("/login");
+    return null;
+  }
+  return user.role === "admin" ? <AdminOverview /> : <Overview />;
+}
 
 function ProtectedRoute({ component: Component }: { component: any }) {
   const { user, isLoading } = useAuth();
@@ -84,9 +101,9 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/admin"    component={AdminLogin} />
 
-      {/* ── User routes ── */}
+      {/* ── Dashboard root (admin → AdminOverview, user → Overview) ── */}
       <Route path="/dashboard">
-        {() => <ProtectedRoute component={Overview} />}
+        {() => <DashboardRoute />}
       </Route>
       <Route path="/dashboard/licenses">
         {() => <ProtectedRoute component={UserLicenses} />}
