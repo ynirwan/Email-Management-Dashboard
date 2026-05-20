@@ -824,12 +824,14 @@ export function Licenses() {
   const [accessLicense, setAccessLicense] = useState<any>(null);
   const [detailLicense, setDetailLicense] = useState<any>(null);
   const [deliveryLicense, setDeliveryLicense] = useState<any>(null);
+  const [togglingManagedId, setTogglingManagedId] = useState<number | null>(null);
 
   const { data: apiData, isLoading } = useLicenses(1, 50, search, statusFilter);
   const licenses: any[] = apiData?.licenses ?? [];
 
-  const revokeMutation = useRevokeLicense();
-  const unrevokeMutation = useUnrevokeLicense();
+  const revokeMutation    = useRevokeLicense();
+  const unrevokeMutation  = useUnrevokeLicense();
+  const managedMutation   = useToggleManaged();
 
   const filtered = licenses.filter((l) => {
     const matchSearch =
@@ -859,6 +861,16 @@ export function Licenses() {
   const handleUnrevoke = (id: number) => {
     if (!confirm("Unrevoke this license and reactivate it?")) return;
     unrevokeMutation.mutate(id);
+  };
+
+  const handleManagedToggle = (lic: any) => {
+    const enabling = !lic.isManaged;
+    if (!enabling && !confirm(`Remove managed status from ${lic.domain}? This will also disable admin access.`)) return;
+    setTogglingManagedId(lic.id);
+    managedMutation.mutate(
+      { id: lic.id, action: enabling ? "opt_in" : "opt_out" },
+      { onSettled: () => setTogglingManagedId(null) },
+    );
   };
 
   return (
@@ -1000,6 +1012,7 @@ export function Licenses() {
                   <th className="px-5 py-3 font-semibold">Quota</th>
                   <th className="px-5 py-3 font-semibold">Expires</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
+                  <th className="px-5 py-3 font-semibold">Managed</th>
                   <th className="px-5 py-3 font-semibold text-right">
                     Actions
                   </th>
@@ -1009,7 +1022,7 @@ export function Licenses() {
                 {filtered.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="px-5 py-12 text-center text-muted-foreground"
                     >
                       No licenses found
@@ -1028,15 +1041,7 @@ export function Licenses() {
                       >
                         {/* Customer */}
                         <td className="px-5 py-3.5 font-medium">
-                          <div className="flex items-center gap-2">
-                            {lic.customerName}
-                            {lic.isManaged && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 shrink-0">
-                                <Wrench className="w-2.5 h-2.5" />
-                                Managed
-                              </span>
-                            )}
-                          </div>
+                          {lic.customerName}
                         </td>
 
                         {/* Domain */}
@@ -1098,6 +1103,36 @@ export function Licenses() {
                         {/* Status */}
                         <td className="px-5 py-3.5">
                           {statusBadge(lic.status)}
+                        </td>
+
+                        {/* Managed */}
+                        <td className="px-5 py-3.5">
+                          {lic.isManaged ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 w-fit">
+                                <Wrench className="w-2.5 h-2.5" />
+                                Managed
+                              </span>
+                              <button
+                                className="text-[10px] text-muted-foreground hover:text-destructive underline text-left transition-colors"
+                                onClick={() => handleManagedToggle(lic)}
+                                disabled={togglingManagedId === lic.id}
+                              >
+                                {togglingManagedId === lic.id ? "Saving…" : "Disable"}
+                              </button>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2.5 text-xs gap-1.5 border-blue-300 text-blue-600 hover:bg-blue-50"
+                              onClick={() => handleManagedToggle(lic)}
+                              isLoading={togglingManagedId === lic.id}
+                            >
+                              <Wrench className="w-3 h-3" />
+                              Enable Managed
+                            </Button>
+                          )}
                         </td>
 
                         {/* Actions */}
