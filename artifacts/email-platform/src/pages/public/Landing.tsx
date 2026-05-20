@@ -16,16 +16,16 @@ import { cn } from "@/lib/utils";
 // ─────────────────────────────────────────────────────────────────────────────
 const ANIM_CSS = `
 @keyframes env-hero {
-  0%   { transform: translateX(0)    translateY(0px)  rotate(var(--r)); opacity:0; }
-  8%   { opacity: var(--op); }
-  92%  { opacity: var(--op); }
-  100% { transform: translateX(75vw) translateY(-18px) rotate(calc(var(--r) + 6deg)); opacity:0; }
+  0%   { transform: translateX(0px) translateY(0px) rotate(var(--r)); opacity:0; }
+  10%  { opacity:var(--op); }
+  88%  { opacity:var(--op); }
+  100% { transform: translateX(calc(100vw - 80px)) translateY(-10px) rotate(calc(var(--r) + 6deg)); opacity:0; }
 }
 @keyframes env-cta {
-  0%   { transform: translateX(var(--sx)) translateY(0px)   rotate(var(--r)); opacity:0; }
-  10%  { opacity: var(--op); }
-  90%  { opacity: var(--op); }
-  100% { transform: translateX(calc(var(--sx) + var(--dx))) translateY(-60px) rotate(calc(var(--r) + 8deg)); opacity:0; }
+  0%   { transform: translateY(30px) translateX(0px) rotate(var(--r)); opacity:0; }
+  10%  { opacity:var(--op); }
+  90%  { opacity:var(--op); }
+  100% { transform: translateY(-380px) translateX(var(--dx)) rotate(calc(var(--r) + 8deg)); opacity:0; }
 }
 @keyframes float-pop {
   0%,100% { transform:translateY(0px); }
@@ -39,8 +39,9 @@ const ANIM_CSS = `
   0%,100% { text-shadow:none; }
   30%     { text-shadow:0 0 22px hsl(var(--primary)/0.55); color:hsl(var(--primary)); }
 }
-.env-hero-anim { animation: env-hero var(--dur) var(--del) ease-in-out infinite; }
-.env-cta-anim  { animation: env-cta  var(--dur) var(--del) ease-in-out infinite; }
+/* BUG FIX: timing-function MUST come before delay in shorthand */
+.env-hero-anim { animation: env-hero var(--dur) ease-in-out var(--del) infinite; }
+.env-cta-anim  { animation: env-cta  var(--dur) ease-in-out var(--del) infinite; }
 .pop-float     { animation: float-pop 4s ease-in-out infinite; }
 .srv-flicker   { animation: server-flicker 4s linear 0.8s 1; }
 .sec-flash     { animation: section-flash 0.9s ease-out; }
@@ -51,41 +52,68 @@ function StyleInjector() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// A — Hero Envelope Journey  (left → server midpoint → inbox right)
+// Shared envelope SVG — 15% teal/white fill, 2px stroke, reads at all sizes
+// Opacity is controlled entirely by CSS animation (var(--op)) — NO inline opacity
+// ─────────────────────────────────────────────────────────────────────────────
+function EnvelopeSVG({ size }: { size: number }) {
+  const w = size;
+  const h = Math.round(size * 0.72);
+  return (
+    <svg width={w} height={h} viewBox="0 0 32 23" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Body — subtle fill so shape reads even at low opacity */}
+      <rect x="1" y="1" width="30" height="21" rx="3"
+        fill="currentColor" fillOpacity="0.15"
+        stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      {/* Flap crease */}
+      <polyline points="1,5 16,14.5 31,5"
+        fill="none" stroke="currentColor" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A — Hero Envelope Journey  (left → server → inbox, 10 envelopes)
 // ─────────────────────────────────────────────────────────────────────────────
 const HERO_ENVS = [
-  { y: "28%", dur: "9s",  del: "0s",   r: "-8deg",  op: "0.18", size: 16 },
-  { y: "48%", dur: "12s", del: "2.5s", r: "5deg",   op: "0.13", size: 20 },
-  { y: "38%", dur: "11s", del: "5s",   r: "-4deg",  op: "0.16", size: 14 },
-  { y: "62%", dur: "14s", del: "1.2s", r: "10deg",  op: "0.10", size: 18 },
-  { y: "22%", dur: "10s", del: "7s",   r: "-12deg", op: "0.12", size: 15 },
+  { y: "12%", dur: "10s", del: "0s",    r: "-8deg",  op: 0.38, size: 40 },
+  { y: "26%", dur: "13s", del: "2s",    r: "5deg",   op: 0.30, size: 52 },
+  { y: "39%", dur: "11s", del: "4.5s",  r: "-4deg",  op: 0.42, size: 36 },
+  { y: "51%", dur: "14s", del: "1s",    r: "10deg",  op: 0.32, size: 58 },
+  { y: "63%", dur: "9s",  del: "7s",    r: "-12deg", op: 0.36, size: 44 },
+  { y: "20%", dur: "12s", del: "9.5s",  r: "7deg",   op: 0.28, size: 48 },
+  { y: "73%", dur: "15s", del: "3s",    r: "-6deg",  op: 0.30, size: 38 },
+  { y: "44%", dur: "10s", del: "11.5s", r: "12deg",  op: 0.34, size: 54 },
+  { y: "33%", dur: "13s", del: "5.5s",  r: "-9deg",  op: 0.40, size: 42 },
+  { y: "57%", dur: "11s", del: "8s",    r: "3deg",   op: 0.28, size: 46 },
 ];
 
 function HeroEnvelopes() {
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-      {/* Source icon — left edge */}
-      <div className="absolute left-6 top-1/2 -translate-y-1/2 text-primary/20">
-        <Server className="w-8 h-8" />
+      {/* Source — left anchor */}
+      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-primary/30">
+        <Server className="w-9 h-9" />
       </div>
-      {/* Destination icon — right edge */}
-      <div className="absolute right-6 top-1/2 -translate-y-1/2 text-primary/20">
-        <Inbox className="w-8 h-8" />
+      {/* Destination — right anchor */}
+      <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/30">
+        <Inbox className="w-9 h-9" />
       </div>
-      {/* Drifting envelopes */}
+      {/* 10 drifting envelopes — NO inline opacity; animation handles it */}
       {HERO_ENVS.map((e, i) => (
         <span
           key={i}
-          className="env-hero-anim absolute left-6 text-primary"
+          className="env-hero-anim absolute text-primary"
           style={{
+            left: "44px",       // start just right of the Server icon
             top: e.y,
             "--dur": e.dur,
             "--del": e.del,
             "--r": e.r,
-            "--op": e.op,
+            "--op": String(e.op),
           } as React.CSSProperties}
         >
-          <Mail style={{ width: e.size, height: e.size, opacity: parseFloat(e.op) }} />
+          <EnvelopeSVG size={e.size} />
         </span>
       ))}
     </div>
@@ -344,15 +372,24 @@ function useSectionFlash() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// M — CTA Mail Trail
+// M — CTA Mail Trail  (14 envelopes, 36–58px, 0.18–0.32 opacity dark bg)
+// Opacity controlled entirely by CSS animation var(--op) — NO inline opacity
 // ─────────────────────────────────────────────────────────────────────────────
 const CTA_ENVS = [
-  { sx: "5%",  dur: "18s", del: "0s",   r: "-10deg", op: "0.08", dx: "30px",  size: 16 },
-  { sx: "20%", dur: "24s", del: "5s",   r: "7deg",   op: "0.06", dx: "-20px", size: 20 },
-  { sx: "38%", dur: "20s", del: "10s",  r: "-5deg",  op: "0.07", dx: "40px",  size: 14 },
-  { sx: "55%", dur: "16s", del: "2.5s", r: "12deg",  op: "0.05", dx: "-30px", size: 18 },
-  { sx: "70%", dur: "22s", del: "7.5s", r: "-8deg",  op: "0.08", dx: "25px",  size: 15 },
-  { sx: "84%", dur: "19s", del: "13s",  r: "5deg",   op: "0.06", dx: "-15px", size: 17 },
+  { x: "3%",  dur: "20s", del: "0s",    r: "-10deg", op: 0.22, dx: "20px",  size: 38 },
+  { x: "10%", dur: "24s", del: "4s",    r: "7deg",   op: 0.18, dx: "-18px", size: 48 },
+  { x: "19%", dur: "18s", del: "8s",    r: "-5deg",  op: 0.26, dx: "28px",  size: 42 },
+  { x: "27%", dur: "22s", del: "2s",    r: "12deg",  op: 0.20, dx: "-24px", size: 56 },
+  { x: "35%", dur: "26s", del: "11s",   r: "-8deg",  op: 0.30, dx: "16px",  size: 36 },
+  { x: "43%", dur: "19s", del: "6s",    r: "4deg",   op: 0.24, dx: "-32px", size: 52 },
+  { x: "52%", dur: "23s", del: "14s",   r: "-13deg", op: 0.18, dx: "22px",  size: 44 },
+  { x: "60%", dur: "21s", del: "1s",    r: "9deg",   op: 0.28, dx: "-20px", size: 58 },
+  { x: "68%", dur: "17s", del: "9s",    r: "-6deg",  op: 0.22, dx: "30px",  size: 40 },
+  { x: "75%", dur: "25s", del: "5s",    r: "11deg",  op: 0.32, dx: "-14px", size: 46 },
+  { x: "82%", dur: "20s", del: "12s",   r: "-4deg",  op: 0.20, dx: "18px",  size: 54 },
+  { x: "88%", dur: "22s", del: "3s",    r: "6deg",   op: 0.26, dx: "-26px", size: 38 },
+  { x: "93%", dur: "18s", del: "7s",    r: "-11deg", op: 0.24, dx: "12px",  size: 50 },
+  { x: "97%", dur: "24s", del: "15s",   r: "8deg",   op: 0.18, dx: "-10px", size: 44 },
 ];
 
 function CtaEnvelopes() {
@@ -361,17 +398,18 @@ function CtaEnvelopes() {
       {CTA_ENVS.map((e, i) => (
         <span
           key={i}
-          className="env-cta-anim absolute bottom-4 text-white"
+          className="env-cta-anim absolute text-white"
           style={{
+            bottom: "-30px",
+            left: e.x,
             "--dur": e.dur,
             "--del": e.del,
             "--r": e.r,
-            "--op": e.op,
-            "--sx": e.sx,
+            "--op": String(e.op),
             "--dx": e.dx,
           } as React.CSSProperties}
         >
-          <Mail style={{ width: e.size, height: e.size, opacity: parseFloat(e.op) }} />
+          <EnvelopeSVG size={e.size} />
         </span>
       ))}
     </div>
