@@ -85,3 +85,8 @@ timeoutMs = 20000
 
 [nix]
 packages = ["vimHugeX"]
+
+[userenv]
+
+[userenv.shared]
+JWT_SECRET = "7223811b90c580db3e08585712d6d6453689660827de9fa3296ba509ccb183d0a1067168fb4a749ff1357e0897b43aa4"
