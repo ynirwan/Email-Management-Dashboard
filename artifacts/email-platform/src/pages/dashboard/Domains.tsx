@@ -89,7 +89,8 @@ function StatusChip({ status }: { status: Domain["status"] }) {
       cls: "text-muted-foreground bg-muted border-border",
     },
   };
-  const { icon: Icon, label, cls } = map[status];
+  const entry = map[status] ?? map["active"];
+  const { icon: Icon, label, cls } = entry;
   return (
     <span
       className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${cls}`}
