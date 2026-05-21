@@ -1,0 +1,2 @@
+- [JWT_SECRET reset](jwt-secret-reset.md) — JWT_SECRET is wiped on env reset; must regenerate and re-set via setEnvVars each time Node module is reinstalled.
+- [Node module missing on reset](node-module-reset.md) — Node.js 24 (nodejs-24) must be reinstalled via installProgrammingLanguage after environment resets; pnpm comes bundled with it.
