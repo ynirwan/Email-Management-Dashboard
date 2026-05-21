@@ -47,7 +47,6 @@ export const PLAN_FEATURE_FLAGS: Record<string, FeatureFlag[]> = {
     "analytics_basic",
     "suppression_list",
     "webhooks",
-    "segmentation_advanced",
     "audit_logs",
   ],
   pro: [

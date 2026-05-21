@@ -34,12 +34,13 @@ const FEATURE_MATRIX: {
   { label: "Basic Analytics",             starter: true,             pro: true,           agency: true,        note: "" },
   { label: "Suppression Management",      starter: true,             pro: true,           agency: true,        note: "" },
   { label: "Webhooks",                    starter: true,             pro: true,           agency: true,        note: "" },
-  { label: "Audience Segmentation",       starter: true,             pro: true,           agency: true,        note: "Segment by any field or tag" },
+  { label: "CSV Export",                  starter: true,             pro: true,           agency: true,        note: "Campaign analytics export" },
   { label: "Audit Trail",                 starter: true,             pro: true,           agency: true,        note: "Full activity history" },
   // ── Domains ───────────────────────────────────────────────────────────────
   { label: "Sending Domains",             starter: "License domain", pro: "Up to 5",      agency: "Unlimited", note: "" },
   { label: "Tracking Domain per Sender",  starter: false,            pro: "1 per domain", agency: "1 per domain", note: "Click / open / unsubscribe" },
   // ── Pro & Agency ──────────────────────────────────────────────────────────
+  { label: "Audience Segmentation",       starter: false,            pro: true,           agency: true,        note: "Segment by any field or tag" },
   { label: "Automation Workflows",        starter: false,            pro: true,           agency: true,        note: "" },
   { label: "A/B Testing",                 starter: false,            pro: true,           agency: true,        note: "" },
   { label: "API Access",                  starter: false,            pro: true,           agency: true,        note: "" },
@@ -166,7 +167,7 @@ export function Plans() {
                 <tbody className="divide-y divide-border/40">
                   {FEATURE_MATRIX.map((row, i) => {
                     const isDomainsStart = i === 8;  // Sending Domains
-                    const isProStart     = i === 10; // Automation Workflows
+                    const isProStart     = i === 10; // Audience Segmentation
                     return (
                       <>
                         {isDomainsStart && (

@@ -65,9 +65,9 @@ router.post("/register", async (req, res) => {
       plan:                   "starter",
       isActive:               false,    // inactive until email verified
       emailsUsed:             0,
-      emailsLimit:            100000,
+      emailsLimit:            0,
       subscribersUsed:        0,
-      subscribersLimit:       25000,
+      subscribersLimit:       0,
       emailVerificationToken: verificationToken,
     }).returning();
 

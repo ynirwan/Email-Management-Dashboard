@@ -88,10 +88,11 @@ function formatLicense(lic: any, customerName?: string) {
     lastPingIp:    lic.lastPingIp  ?? null,
     pingCount:     lic.pingCount   ?? 0,
     // Installation tracking
-    installedAt:   lic.installedAt  ? toISO(lic.installedAt) : null,
-    installedIp:   lic.installedIp  ?? null,
-    installCount:  lic.installCount ?? 0,
-    ipMismatch:    lic.ipMismatch   ?? false,
+    installedAt:      lic.installedAt  ? toISO(lic.installedAt) : null,
+    installedIp:      lic.installedIp  ?? null,
+    installCount:     lic.installCount ?? 0,
+    ipMismatch:       lic.ipMismatch   ?? false,
+    installationIds:  (() => { try { return JSON.parse(lic.installationIds ?? "[]"); } catch { return []; } })(),
   };
 }
 
@@ -506,16 +507,17 @@ router.post("/:id/admin-token", requireAdmin, async (req, res) => {
 });
 
 // ── POST /api/licenses/register-install ──────────────────────────────────────
-// Called once by setup_server.py immediately after a successful installation.
-// Records the server's public IP so the dashboard can:
-//   • Show "installed / not installed" status per license
-//   • Detect future pings from a different IP (potential license reuse)
+// Called by the email app on startup (lifespan handler) and after a successful
+// setup-wizard run.  Registers the installation UUID so the dashboard can:
+//   • Track unique running instances per license (seat enforcement)
+//   • Show "X / Y installations used" in the admin UI
+//   • Detect IP changes (potential license reuse)
 //
-// Body: { domain, signature, server_ip }
+// Body: { domain, signature, server_ip, installation_id }
 // No auth required — the license signature proves the caller owns the install.
 router.post("/register-install", async (req, res) => {
   try {
-    const { domain, signature, server_ip } = req.body;
+    const { domain, signature, server_ip, installation_id } = req.body;
     if (!domain || !signature) {
       res.status(400).json({ ok: false, message: "domain and signature required" }); return;
     }
@@ -563,54 +565,71 @@ router.post("/register-install", async (req, res) => {
       return;
     }
 
-    // Enforce per-plan installation seat limit.
-    // Starter = 1 install, Pro = 3, Agency = unlimited (9 999 999).
-    const planDef = PLAN_DEFINITIONS.find((p) => p.id === lic.plan);
+    // ── UUID-based seat enforcement ───────────────────────────────────────────
+    // Parse the known installation IDs from the DB.
+    const planDef  = PLAN_DEFINITIONS.find((p) => p.id === lic.plan);
     const seatLimit = planDef?.installations ?? 1;
-    const usedSeats = lic.installCount ?? 0;
-    // Allow re-registration from the exact same IP (e.g. server restart / re-run of setup wizard)
-    const isSameIpReInstall = !!lic.installedIp && lic.installedIp === clientIp;
-    if (!isSameIpReInstall && usedSeats >= seatLimit) {
-      res.status(403).json({
-        ok:        false,
-        message:   `Installation limit reached: your '${lic.plan}' license allows ${seatLimit} installation${seatLimit === 1 ? "" : "s"} and you have already used ${usedSeats}. Please upgrade your license via the ZeniPost Dashboard.`,
-        code:      "INSTALL_LIMIT_REACHED",
-        used:      usedSeats,
-        limit:     seatLimit,
-        plan:      lic.plan,
-      });
-      return;
+    let knownIds: string[] = [];
+    try { knownIds = JSON.parse(lic.installationIds ?? "[]"); } catch { knownIds = []; }
+
+    let isNewInstallation = false;
+    if (installation_id && typeof installation_id === "string") {
+      if (!knownIds.includes(installation_id)) {
+        // New UUID — check seat limit before adding.
+        // Agency (seatLimit = 9_999_999) is treated as unlimited.
+        if (seatLimit < 9_000_000 && knownIds.length >= seatLimit) {
+          res.status(403).json({
+            ok:        false,
+            message:   `Installation limit reached: your '${lic.plan}' plan allows ${seatLimit} installation${seatLimit === 1 ? "" : "s"} and all seats are in use. Please upgrade your license via the ZeniPost Dashboard.`,
+            code:      "INSTALL_LIMIT_REACHED",
+            used:      knownIds.length,
+            limit:     seatLimit,
+            plan:      lic.plan,
+          });
+          return;
+        }
+        knownIds.push(installation_id);
+        isNewInstallation = true;
+      }
+      // Known UUID — re-registration (server restart / setup wizard re-run). No seat consumed.
     }
 
+    // ── IP tracking (informational, never blocks) ─────────────────────────────
     const isFirstInstall = !lic.installedAt;
     const ipChanged      = !!lic.installedIp && !!clientIp && clientIp !== lic.installedIp;
 
     if (!isFirstInstall && ipChanged) {
       console.warn(
         `[LICENSE] Re-install on different IP for lic #${lic.id} domain=${lic.domain}: ` +
-        `original=${lic.installedIp} new=${clientIp} count=${(lic.installCount ?? 0) + 1}`
+        `original=${lic.installedIp} new=${clientIp}`
       );
     }
 
     await db.update(licensesTable)
       .set({
-        installedAt:  lic.installedAt ?? new Date(),   // keep original first-install timestamp
-        installedIp:  isFirstInstall ? clientIp : lic.installedIp,  // never overwrite original IP
-        installCount: sql`${licensesTable.installCount} + 1`,
-        ipMismatch:   ipChanged ? true : lic.ipMismatch,
-        updatedAt:    new Date(),
+        installedAt:      lic.installedAt ?? new Date(),   // keep original first-install timestamp
+        installedIp:      isFirstInstall ? clientIp : lic.installedIp,  // never overwrite original IP
+        installCount:     sql`${licensesTable.installCount} + 1`,
+        ipMismatch:       ipChanged ? true : lic.ipMismatch,
+        installationIds:  JSON.stringify(knownIds),
+        updatedAt:        new Date(),
       })
       .where(eq(licensesTable.id, lic.id));
 
     res.json({
-      ok:               true,
-      is_first_install: isFirstInstall,
-      ip_changed:       ipChanged,
-      message:          isFirstInstall
+      ok:                true,
+      is_first_install:  isFirstInstall,
+      is_new_uuid:       isNewInstallation,
+      ip_changed:        ipChanged,
+      seats_used:        knownIds.length,
+      seats_limit:       seatLimit,
+      message:           isFirstInstall
         ? "Installation registered."
-        : ipChanged
-          ? "Re-installation detected from a different IP. This has been flagged."
-          : "Installation re-registered (same IP).",
+        : isNewInstallation
+          ? "New installation registered."
+          : ipChanged
+            ? "Re-installation detected from a different IP. This has been flagged."
+            : "Installation re-registered.",
     });
   } catch (err) {
     console.error("POST /licenses/register-install error:", err);
@@ -731,7 +750,7 @@ function domainMatchesLicense(pingDomain: string, licDomain: string, licRootDoma
 // Fix #6: root_domain added
 router.post("/ping", async (req, res) => {
   try {
-    const { domain, signature } = req.body;
+    const { domain, signature, installation_id } = req.body;
     if (!domain || !signature) {
       res.status(400).json({ valid: false, message: "domain and signature required" }); return;
     }
@@ -791,6 +810,40 @@ router.post("/ping", async (req, res) => {
       ?? req.socket.remoteAddress
       ?? "";
 
+    // ── Installation seat-limit enforcement ──────────────────────────────────
+    // Each running instance sends a stable installation_id UUID.  We track all
+    // known IDs in a JSON array on the license row and reject new IDs that would
+    // push the count over the plan's installation limit.
+    const planDef    = PLAN_DEFINITIONS.find((p) => p.id === lic.plan);
+    const seatLimit  = planDef?.installations ?? 1;
+    let   knownIds: string[] = [];
+    try { knownIds = JSON.parse(lic.installationIds ?? "[]"); } catch { knownIds = []; }
+
+    if (installation_id && typeof installation_id === "string") {
+      const isKnown = knownIds.includes(installation_id);
+      if (!isKnown) {
+        // New installation ID — check if we're already at the limit.
+        // Agency (seatLimit = 9_999_999) effectively means unlimited.
+        if (seatLimit < 9_000_000 && knownIds.length >= seatLimit) {
+          console.warn(
+            `[LICENSE] Seat limit exceeded for lic #${lic.id} domain=${lic.domain}: ` +
+            `limit=${seatLimit} known=${knownIds.length} new_id=${installation_id}`
+          );
+          res.json({
+            valid:   false,
+            status:  "installation_limit_exceeded",
+            message: `Installation limit reached: your '${lic.plan}' plan allows ${seatLimit} installation${seatLimit === 1 ? "" : "s"}. ` +
+                     `Remove an existing installation or upgrade your license via the ZeniPost Dashboard.`,
+            limit:   seatLimit,
+            used:    knownIds.length,
+          });
+          return;
+        }
+        // New ID within limit — record it.
+        knownIds.push(installation_id);
+      }
+    }
+
     // Detect if this ping is coming from a different IP than the registered install.
     // We warn but never block — the customer may have moved servers legitimately.
     const mismatch =
@@ -807,11 +860,12 @@ router.post("/ping", async (req, res) => {
 
     await db.update(licensesTable)
       .set({
-        lastPingAt:  new Date(),
-        lastPingIp:  pingIp || null,
-        pingCount:   sql`${licensesTable.pingCount} + 1`,
-        ipMismatch:  mismatch ? true : lic.ipMismatch,  // sticky — stays true once flagged
-        updatedAt:   new Date(),
+        lastPingAt:      new Date(),
+        lastPingIp:      pingIp || null,
+        pingCount:       sql`${licensesTable.pingCount} + 1`,
+        ipMismatch:      mismatch ? true : lic.ipMismatch,  // sticky — stays true once flagged
+        installationIds: JSON.stringify(knownIds),
+        updatedAt:       new Date(),
       })
       .where(eq(licensesTable.id, lic.id));
 

@@ -297,8 +297,6 @@ export function Overview() {
     );
 
   const { user, planInfo, licenses, domains } = data;
-  const emailPct = pct(user.emailsUsed, user.emailsLimit);
-  const subsPct = pct(user.subscribersUsed, user.subscribersLimit);
 
   const licCounts = {
     active: licenses.filter((l: any) => l.status === "active").length,
@@ -328,7 +326,7 @@ export function Overview() {
         hasLicenses={licenses.length > 0}
       />
 
-      {/* Top row: Plan card + Usage */}
+      {/* Top row: Plan card */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
         {/* Plan Card */}
         <Card className="border-border/50">
@@ -346,62 +344,28 @@ export function Overview() {
             </div>
             <div className="space-y-1 text-sm text-muted-foreground mb-5">
               <div className="flex items-center justify-between">
-                <span>Emails / month</span>
+                <span>Sending Domains</span>
                 <span className="font-medium text-foreground">
-                  {fmt(planInfo.emailsLimit)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Subscribers</span>
-                <span className="font-medium text-foreground">
-                  {fmt(planInfo.subscribersLimit)}
+                  {user.plan === "agency" ? "Unlimited" : user.plan === "pro" ? "Up to 5" : "License domain"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span>Installations</span>
                 <span className="font-medium text-foreground">
-                  {user.plan === "agency"
-                    ? "Unlimited"
-                    : user.plan === "pro"
-                      ? "Up to 3"
-                      : "1"}
+                  {user.plan === "agency" ? "Unlimited" : user.plan === "pro" ? "Up to 3" : "1"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Price</span>
+                <span className="font-medium text-foreground">
+                  ${planInfo.price} one-time
                 </span>
               </div>
             </div>
-            {emailPct >= 80 || subsPct >= 80 ? (
-              <Button size="sm" className="w-full gap-2">
-                <TrendingUp className="w-4 h-4" />
-                Upgrade Plan
-              </Button>
-            ) : (
-              <Button size="sm" variant="outline" className="w-full gap-2">
-                <TrendingUp className="w-4 h-4" />
-                View Plans
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Usage Meters */}
-        <Card className="border-border/50">
-          <CardContent className="p-6">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold mb-4">
-              Usage This Month
-            </p>
-            <div className="space-y-5">
-              <UsageMeter
-                icon={Mail}
-                label="Emails Sent"
-                used={user.emailsUsed}
-                limit={user.emailsLimit}
-              />
-              <UsageMeter
-                icon={Users}
-                label="Subscribers"
-                used={user.subscribersUsed}
-                limit={user.subscribersLimit}
-              />
-            </div>
+            <Button size="sm" variant="outline" className="w-full gap-2">
+              <TrendingUp className="w-4 h-4" />
+              View Plans
+            </Button>
           </CardContent>
         </Card>
       </div>

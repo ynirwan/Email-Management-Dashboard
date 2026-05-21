@@ -52,6 +52,13 @@ import { formatNumber } from "@/lib/utils";
 
 const PLAN_DEFAULTS = PLAN_QUOTAS;
 
+// Per-plan installation seat limits (mirrors PLAN_DEFINITIONS in api-server)
+const PLAN_SEAT_LIMITS: Record<string, number> = {
+  starter: 1,
+  pro:     3,
+  agency:  9_999_999,
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function statusBadge(status: string) {
@@ -77,6 +84,24 @@ function statusBadge(status: string) {
       </Badge>
     );
   return <Badge variant="outline">Expired</Badge>;
+}
+
+/** Small seat-usage pill: "2 / 3" with colour coding */
+function seatsPill(used: number, plan: string) {
+  const limit = PLAN_SEAT_LIMITS[plan] ?? 1;
+  const isUnlimited = limit >= 9_000_000;
+  const full = !isUnlimited && used >= limit;
+  const near = !isUnlimited && !full && used >= limit - 1 && limit > 1;
+  const cls = full
+    ? "bg-destructive/10 text-destructive border-destructive/30"
+    : near
+    ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+    : "bg-muted/60 text-muted-foreground border-border/50";
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${cls}`}>
+      {isUnlimited ? `${used} / ∞` : `${used} / ${limit}`}
+    </span>
+  );
 }
 
 function planBadge(plan: string) {
@@ -448,8 +473,6 @@ function LicenseDetailModal({
           {[
             ["Domain", lic.domain],
             ["Plan", lic.plan],
-            ["Emails/mo", formatNumber(lic.emailsPerMonth)],
-            ["Subscribers", formatNumber(lic.subscribersLimit)],
             ["Issued", lic.issuedAt],
             [
               "Expires",
@@ -464,6 +487,49 @@ function LicenseDetailModal({
             </div>
           ))}
         </div>
+
+        {/* Installation seat usage */}
+        {(() => {
+          const ids: string[] = lic.installationIds ?? [];
+          const limit = PLAN_SEAT_LIMITS[lic.plan] ?? 1;
+          const isUnlimited = limit >= 9_000_000;
+          return (
+            <div className="rounded-xl border border-border/50 bg-muted/20 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Installations
+                </p>
+                {seatsPill(ids.length, lic.plan)}
+              </div>
+              {ids.length > 0 ? (
+                <div className="space-y-1">
+                  {ids.map((id, i) => (
+                    <div key={id} className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground w-4">{i + 1}.</span>
+                      <code className="text-[10px] font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded flex-1 truncate">
+                        {id}
+                      </code>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">No installations registered yet.</p>
+              )}
+              {!isUnlimited && ids.length >= limit && (
+                <p className="text-xs text-destructive font-medium flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Seat limit reached — additional instances will be rejected.
+                </p>
+              )}
+              {lic.ipMismatch && (
+                <p className="text-xs text-amber-600 font-medium flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  IP mismatch detected — this license may be in use on multiple servers.
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Features */}
         <div>
@@ -1045,7 +1111,7 @@ export function Licenses() {
                   <th className="px-5 py-3 font-semibold">Domain</th>
                   <th className="px-5 py-3 font-semibold">Plan</th>
                   <th className="px-5 py-3 font-semibold">Delivery</th>
-                  <th className="px-5 py-3 font-semibold">Quota</th>
+                  <th className="px-5 py-3 font-semibold">Installs</th>
                   <th className="px-5 py-3 font-semibold">Expires</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
                   <th className="px-5 py-3 font-semibold">Managed</th>
@@ -1116,10 +1182,15 @@ export function Licenses() {
                           )}
                         </td>
 
-                        {/* Quota */}
-                        <td className="px-5 py-3.5 text-xs text-muted-foreground">
-                          <div>{formatNumber(lic.emailsPerMonth)}/mo</div>
-                          <div>{formatNumber(lic.subscribersLimit)} subs</div>
+                        {/* Installs */}
+                        <td className="px-5 py-3.5">
+                          {seatsPill((lic.installationIds ?? []).length, lic.plan)}
+                          {lic.ipMismatch && (
+                            <div className="text-[10px] text-amber-500 mt-0.5 flex items-center gap-0.5">
+                              <AlertTriangle className="w-2.5 h-2.5" />
+                              IP mismatch
+                            </div>
+                          )}
                         </td>
 
                         {/* Expires */}

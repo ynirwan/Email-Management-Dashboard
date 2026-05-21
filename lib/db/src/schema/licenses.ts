@@ -40,10 +40,14 @@ export const licensesTable = pgTable("licenses", {
   // Set once when the email app calls POST /api/licenses/register-install after
   // a successful setup-wizard run.  Subsequent install attempts from a *different*
   // IP increment installCount and flag the license for review.
-  installedAt:   timestamp("installed_at"),
-  installedIp:   text("installed_ip"),              // public IP at first install
-  installCount:  integer("install_count").notNull().default(0),  // >1 = potential reuse
-  ipMismatch:    boolean("ip_mismatch").notNull().default(false), // true if ping IP ≠ install IP
+  installedAt:      timestamp("installed_at"),
+  installedIp:      text("installed_ip"),              // public IP at first install
+  installCount:     integer("install_count").notNull().default(0),  // >1 = potential reuse
+  ipMismatch:       boolean("ip_mismatch").notNull().default(false), // true if ping IP ≠ install IP
+  // JSON array of unique installation_id UUIDs — one per running instance.
+  // Used to enforce per-plan seat limits via the ping endpoint.
+  // e.g. ["uuid-a", "uuid-b", "uuid-c"]
+  installationIds:  text("installation_ids").notNull().default("[]"),
 
   // ── Activation gate ───────────────────────────────────────────────────────
   // FALSE for licenses auto-created when a user registers a domain (pending
