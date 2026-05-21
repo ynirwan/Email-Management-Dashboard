@@ -89,6 +89,15 @@ router.post("/", requireAuth, async (req, res) => {
       return;
     }
 
+    // Require at least one of transactionRef or proofImageUrl as proof of payment.
+    if (!transactionRef && !proofImageUrl) {
+      res.status(400).json({
+        error:   "Bad Request",
+        message: "Please provide a transaction reference ID or a payment proof screenshot — at least one is required.",
+      });
+      return;
+    }
+
     // Validate licenseId belongs to user if provided
     if (licenseId) {
       const licRows = await db.select().from(licensesTable).where(eq(licensesTable.id, parseInt(licenseId))).limit(1);

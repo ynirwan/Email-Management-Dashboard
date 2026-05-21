@@ -7,52 +7,45 @@ import {
   Input,
   Spinner,
 } from "@/components/ui/core";
-import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { fetchApi } from "@/lib/api";
 import {
   Search,
   AlertTriangle,
   CheckCircle2,
-  XCircle,
   Wifi,
   WifiOff,
   Clock,
   Users,
-  Mail,
   ShieldCheck,
   ShieldOff,
   RefreshCw,
   Filter,
-  Download,
+  Monitor,
 } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface CustomerUsageRow {
-  // User fields
   userId: number;
   name: string;
   email: string;
   company: string | null;
-  plan: "free" | "starter" | "pro" | "agency";
+  plan: string;
   isActive: boolean;
-  emailsUsed: number;
-  emailsLimit: number;
-  subscribersUsed: number;
-  subscribersLimit: number;
-  // License fields (first/primary license)
   licenseId: number | null;
   domain: string | null;
   licenseStatus: "active" | "expiring" | "revoked" | "expired" | null;
   isManaged: boolean;
   adminAccessEnabled: boolean;
   lastPingAt: string | null;
+  pingCount: number;
   expiresAt: string | null;
-  // Derived
   totalLicenses: number;
   activeLicenses: number;
+  installationIds: string[];
+  seatLimit: number;
 }
 
 interface UsageListResponse {
@@ -62,101 +55,38 @@ interface UsageListResponse {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function pct(used: number, limit: number) {
-  if (!limit || limit < 0) return 0;
-  return Math.min(100, Math.round((used / limit) * 100));
-}
-
-function usageLevel(p: number): "ok" | "warning" | "critical" {
-  if (p >= 100) return "critical";
-  if (p >= 80) return "warning";
-  return "ok";
-}
-
-function fmt(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
-  return String(n);
-}
-
 function pingStatus(lastPingAt: string | null): "online" | "stale" | "offline" {
   if (!lastPingAt) return "offline";
-  const ms = Date.now() - new Date(lastPingAt).getTime();
-  const hours = ms / (1000 * 60 * 60);
-  if (hours < 2) return "online";
+  const hours = (Date.now() - new Date(lastPingAt).getTime()) / 3_600_000;
+  if (hours < 2)  return "online";
   if (hours < 48) return "stale";
   return "offline";
 }
 
 const PLAN_COLORS: Record<string, string> = {
-  free: "bg-muted text-muted-foreground",
   starter: "bg-blue-500/10 text-blue-600 border-blue-500/20",
-  pro: "bg-violet-500/10 text-violet-600 border-violet-500/20",
-  agency: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  pro:     "bg-violet-500/10 text-violet-600 border-violet-500/20",
+  agency:  "bg-amber-500/10 text-amber-600 border-amber-500/20",
 };
 
-// ── UsageBar ──────────────────────────────────────────────────────────────────
-
-function UsageBar({
-  used,
-  limit,
-  label,
-}: {
-  used: number;
-  limit: number;
-  label: string;
-}) {
-  const p = pct(used, limit);
-  const level = usageLevel(p);
-  const barColor =
-    level === "critical"
-      ? "bg-destructive"
-      : level === "warning"
-        ? "bg-amber-500"
-        : "bg-primary";
-
-  return (
-    <div className="space-y-1 min-w-[140px]">
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">{label}</span>
-        <span
-          className={
-            level === "critical"
-              ? "text-destructive font-bold"
-              : level === "warning"
-                ? "text-amber-600 font-semibold"
-                : "text-foreground font-medium"
-          }
-        >
-          {fmt(used)}
-          <span className="text-muted-foreground font-normal">
-            /{fmt(limit)}
-          </span>
-        </span>
-      </div>
-      <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-          style={{ width: `${p}%` }}
-        />
-      </div>
-      <div className="text-right text-[10px] text-muted-foreground">{p}%</div>
-    </div>
-  );
-}
+const LICENSE_STATUS_COLORS: Record<string, string> = {
+  active:   "text-emerald-600",
+  expiring: "text-amber-600",
+  revoked:  "text-destructive",
+  expired:  "text-muted-foreground",
+};
 
 // ── PingBadge ─────────────────────────────────────────────────────────────────
 
 function PingBadge({ lastPingAt }: { lastPingAt: string | null }) {
-  const status = pingStatus(lastPingAt);
-  if (status === "online")
+  const s = pingStatus(lastPingAt);
+  if (s === "online")
     return (
       <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
-        <Wifi className="w-3 h-3" />
-        Online
+        <Wifi className="w-3 h-3" /> Online
       </span>
     );
-  if (status === "stale")
+  if (s === "stale")
     return (
       <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">
         <Clock className="w-3 h-3" />
@@ -167,33 +97,33 @@ function PingBadge({ lastPingAt }: { lastPingAt: string | null }) {
     );
   return (
     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-      <WifiOff className="w-3 h-3" />
-      No ping
+      <WifiOff className="w-3 h-3" /> No ping
     </span>
   );
 }
 
-// ── AlertIcon ─────────────────────────────────────────────────────────────────
+// ── SeatsPill ─────────────────────────────────────────────────────────────────
 
-function AlertIcon({
-  emailPct,
-  subsPct,
-}: {
-  emailPct: number;
-  subsPct: number;
-}) {
-  const max = Math.max(emailPct, subsPct);
-  if (max >= 100)
-    return <XCircle className="w-4 h-4 text-destructive shrink-0" />;
-  if (max >= 80)
-    return <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />;
-  return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />;
+function SeatsPill({ used, limit }: { used: number; limit: number }) {
+  const unlimited = limit >= 9_000_000;
+  const full = !unlimited && used >= limit;
+  const near = !unlimited && !full && used >= limit - 1 && limit > 1;
+  const cls = full
+    ? "bg-destructive/10 text-destructive border-destructive/30"
+    : near
+    ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+    : "bg-muted/60 text-muted-foreground border-border/50";
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border ${cls}`}>
+      <Monitor className="w-3 h-3" />
+      {unlimited ? `${used} / ∞` : `${used} / ${limit}`}
+    </span>
+  );
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 function useUsageList() {
-  // Fetches users + joins with licenses to build usage rows
   return useQuery<UsageListResponse>({
     queryKey: ["/api/admin/usage"],
     queryFn: () => fetchApi("/api/admin/usage"),
@@ -201,80 +131,47 @@ function useUsageList() {
   });
 }
 
-// ── Filter bar ────────────────────────────────────────────────────────────────
+// ── Filter types ──────────────────────────────────────────────────────────────
 
-type FilterType = "all" | "critical" | "warning" | "managed" | "unmanaged";
+type FilterType = "all" | "seat_full" | "no_ping" | "managed" | "unmanaged";
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function UsageEnforcement() {
   const { data, isLoading, error, refetch, isFetching } = useUsageList();
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterType>("all");
+  const [search, setSearch]   = useState("");
+  const [filter, setFilter]   = useState<FilterType>("all");
 
   const customers = data?.customers ?? [];
 
-  // Apply filters
   const filtered = customers.filter((c) => {
-    // Search
     if (search) {
       const q = search.toLowerCase();
-      const match =
-        c.name.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q) ||
-        (c.company?.toLowerCase() ?? "").includes(q) ||
-        (c.domain?.toLowerCase() ?? "").includes(q);
-      if (!match) return false;
+      if (
+        !c.name.toLowerCase().includes(q) &&
+        !c.email.toLowerCase().includes(q) &&
+        !(c.company?.toLowerCase() ?? "").includes(q) &&
+        !(c.domain?.toLowerCase() ?? "").includes(q)
+      ) return false;
     }
-    // Type filter
-    const ep = pct(c.emailsUsed, c.emailsLimit);
-    const sp = pct(c.subscribersUsed, c.subscribersLimit);
-    const max = Math.max(ep, sp);
-    if (filter === "critical" && max < 100) return false;
-    if (filter === "warning" && (max < 80 || max >= 100)) return false;
-    if (filter === "managed" && !c.isManaged) return false;
-    if (filter === "unmanaged" && c.isManaged) return false;
+    if (filter === "seat_full")  return c.seatLimit < 9_000_000 && c.installationIds.length >= c.seatLimit;
+    if (filter === "no_ping")    return pingStatus(c.lastPingAt) === "offline";
+    if (filter === "managed")    return c.isManaged;
+    if (filter === "unmanaged")  return !c.isManaged;
     return true;
   });
 
-  // Summary stats
-  const total = customers.length;
-  const criticalCount = customers.filter((c) => {
-    const max = Math.max(
-      pct(c.emailsUsed, c.emailsLimit),
-      pct(c.subscribersUsed, c.subscribersLimit),
-    );
-    return max >= 100;
-  }).length;
-  const warningCount = customers.filter((c) => {
-    const max = Math.max(
-      pct(c.emailsUsed, c.emailsLimit),
-      pct(c.subscribersUsed, c.subscribersLimit),
-    );
-    return max >= 80 && max < 100;
-  }).length;
-  const managedCount = customers.filter((c) => c.isManaged).length;
+  // Summary counts
+  const total        = customers.length;
+  const seatFullCnt  = customers.filter(c => c.seatLimit < 9_000_000 && c.installationIds.length >= c.seatLimit).length;
+  const noPingCnt    = customers.filter(c => pingStatus(c.lastPingAt) === "offline").length;
+  const managedCnt   = customers.filter(c => c.isManaged).length;
 
-  const FILTERS: {
-    id: FilterType;
-    label: string;
-    count?: number;
-    color?: string;
-  }[] = [
-    { id: "all", label: "All Customers", count: total },
-    {
-      id: "critical",
-      label: "Over Limit",
-      count: criticalCount,
-      color: "text-destructive",
-    },
-    {
-      id: "warning",
-      label: "Near Limit (≥80%)",
-      count: warningCount,
-      color: "text-amber-600",
-    },
-    { id: "managed", label: "Managed", count: managedCount },
+  const FILTERS: { id: FilterType; label: string; count?: number; color?: string }[] = [
+    { id: "all",       label: "All Customers",   count: total },
+    { id: "seat_full", label: "Seats Full",       count: seatFullCnt,  color: "text-destructive" },
+    { id: "no_ping",   label: "No Ping",          count: noPingCnt,    color: "text-amber-600" },
+    { id: "managed",   label: "Managed",          count: managedCnt },
     { id: "unmanaged", label: "Non-Managed" },
   ];
 
@@ -283,11 +180,9 @@ export function UsageEnforcement() {
       {/* Header */}
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold">Usage &amp; Quota</h1>
+          <h1 className="text-3xl font-display font-bold">Usage &amp; Installations</h1>
           <p className="text-muted-foreground mt-1">
-            Monitor all customer installations. Non-managed customers
-            self-enforce limits via their license file. Managed customers have
-            full admin visibility.
+            Monitor customer installations, seat usage, and ping health across all licenses.
           </p>
         </div>
         <Button
@@ -297,9 +192,7 @@ export function UsageEnforcement() {
           className="gap-2 shrink-0"
           disabled={isFetching}
         >
-          <RefreshCw
-            className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`}
-          />
+          <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </div>
@@ -307,30 +200,10 @@ export function UsageEnforcement() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
-          {
-            icon: Users,
-            label: "Total Customers",
-            value: total,
-            color: "text-foreground",
-          },
-          {
-            icon: XCircle,
-            label: "Over Limit",
-            value: criticalCount,
-            color: "text-destructive",
-          },
-          {
-            icon: AlertTriangle,
-            label: "Near Limit",
-            value: warningCount,
-            color: "text-amber-500",
-          },
-          {
-            icon: ShieldCheck,
-            label: "Managed",
-            value: managedCount,
-            color: "text-emerald-500",
-          },
+          { icon: Users,         label: "Total Customers", value: total,       color: "text-foreground" },
+          { icon: Monitor,       label: "Seats Full",      value: seatFullCnt, color: "text-destructive" },
+          { icon: WifiOff,       label: "No Ping",         value: noPingCnt,   color: "text-amber-500" },
+          { icon: ShieldCheck,   label: "Managed",         value: managedCnt,  color: "text-emerald-500" },
         ].map(({ icon: Icon, label, value, color }) => (
           <Card key={label} className="border-border/50">
             <CardContent className="p-4 flex items-center gap-3">
@@ -407,144 +280,100 @@ export function UsageEnforcement() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border/50">
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide w-4"></th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Customer
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Type
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Plan
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Emails
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Subscribers
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Domains
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Instance
-                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Customer</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Plan</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Installations</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Domain</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Last Ping</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Expires</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
                 {filtered.map((c) => {
-                  const ep = pct(c.emailsUsed, c.emailsLimit);
-                  const sp = pct(c.subscribersUsed, c.subscribersLimit);
+                  const ps = pingStatus(c.lastPingAt);
+                  const licColor = LICENSE_STATUS_COLORS[c.licenseStatus ?? ""] ?? "";
                   return (
-                    <tr
-                      key={c.userId}
-                      className="hover:bg-muted/30 transition-colors"
-                    >
-                      {/* Alert icon */}
-                      <td className="px-5 py-4">
-                        <AlertIcon emailPct={ep} subsPct={sp} />
-                      </td>
+                    <tr key={c.userId} className="hover:bg-muted/30 transition-colors">
 
                       {/* Customer */}
                       <td className="px-5 py-4">
-                        <div className="font-medium text-foreground">
-                          {c.company ?? c.name}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {c.email}
-                        </div>
+                        <div className="font-medium text-foreground">{c.company ?? c.name}</div>
+                        <div className="text-xs text-muted-foreground">{c.email}</div>
+                        {!c.isActive && (
+                          <span className="text-[10px] text-destructive font-semibold">Inactive account</span>
+                        )}
                       </td>
 
                       {/* Managed / Non-managed */}
                       <td className="px-5 py-4">
                         {c.isManaged ? (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                            <ShieldCheck className="w-3 h-3" />
-                            Managed
+                            <ShieldCheck className="w-3 h-3" /> Managed
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted border border-border px-2 py-0.5 rounded-full">
-                            <ShieldOff className="w-3 h-3" />
-                            Non-Managed
+                            <ShieldOff className="w-3 h-3" /> Self-hosted
                           </span>
                         )}
                       </td>
 
                       {/* Plan */}
                       <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border capitalize ${
-                            PLAN_COLORS[c.plan] ?? PLAN_COLORS.free
-                          }`}
-                        >
+                        <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border capitalize ${PLAN_COLORS[c.plan] ?? "bg-muted text-muted-foreground"}`}>
                           {c.plan}
                         </span>
                       </td>
 
-                      {/* Emails usage */}
+                      {/* Installations */}
                       <td className="px-5 py-4">
-                        {c.isManaged ? (
-                          <UsageBar
-                            used={c.emailsUsed}
-                            limit={c.emailsLimit}
-                            label="Emails"
-                          />
-                        ) : (
-                          <div className="text-xs text-muted-foreground space-y-0.5">
-                            <div className="font-medium text-foreground">Unlimited</div>
-                            <div className="flex items-center gap-1 text-muted-foreground">
-                              <ShieldOff className="w-3 h-3" />
-                              Feature-gated
-                            </div>
+                        <SeatsPill used={c.installationIds.length} limit={c.seatLimit} />
+                        {c.totalLicenses > 1 && (
+                          <div className="text-[10px] text-muted-foreground mt-1">
+                            {c.activeLicenses} / {c.totalLicenses} licenses active
                           </div>
                         )}
                       </td>
 
-                      {/* Subscribers usage */}
+                      {/* Domain */}
                       <td className="px-5 py-4">
-                        {c.isManaged ? (
-                          <UsageBar
-                            used={c.subscribersUsed}
-                            limit={c.subscribersLimit}
-                            label="Subscribers"
-                          />
+                        {c.domain ? (
+                          <>
+                            <code className="text-xs font-mono text-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                              {c.domain}
+                            </code>
+                            {c.licenseStatus && (
+                              <div className={`text-[10px] mt-0.5 font-medium capitalize ${licColor}`}>
+                                {c.licenseStatus}
+                              </div>
+                            )}
+                          </>
                         ) : (
-                          <div className="text-xs text-muted-foreground space-y-0.5">
-                            <div className="font-medium text-foreground">Unlimited</div>
-                            <div className="flex items-center gap-1 text-muted-foreground">
-                              <ShieldOff className="w-3 h-3" />
-                              Feature-gated
-                            </div>
+                          <span className="text-xs text-muted-foreground">No license</span>
+                        )}
+                      </td>
+
+                      {/* Last Ping */}
+                      <td className="px-5 py-4">
+                        <PingBadge lastPingAt={c.lastPingAt} />
+                        {c.pingCount > 0 && (
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {c.pingCount} total pings
                           </div>
                         )}
                       </td>
 
-                      {/* Domains / Installations */}
+                      {/* Expires */}
                       <td className="px-5 py-4">
-                        <div className="text-sm font-medium text-foreground">
-                          {c.activeLicenses}{" "}
-                          <span className="text-muted-foreground font-normal">
-                            / {c.totalLicenses}
+                        {c.expiresAt ? (
+                          <span className={`text-xs font-medium ${
+                            c.licenseStatus === "expired"  ? "text-destructive" :
+                            c.licenseStatus === "expiring" ? "text-amber-600"   : "text-muted-foreground"
+                          }`}>
+                            {new Date(c.expiresAt).toLocaleDateString()}
                           </span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          active / total
-                        </div>
-                        {c.domain && (
-                          <div className="text-xs text-muted-foreground mt-0.5 truncate max-w-[140px]">
-                            {c.domain}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Instance ping — only meaningful for managed */}
-                      <td className="px-5 py-4">
-                        {c.isManaged ? (
-                          <PingBadge lastPingAt={c.lastPingAt} />
                         ) : (
-                          <span className="text-xs text-muted-foreground">
-                            —
-                          </span>
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </td>
                     </tr>
@@ -555,12 +384,9 @@ export function UsageEnforcement() {
           </div>
 
           <div className="px-5 py-3 border-t border-border/50 text-xs text-muted-foreground flex items-center justify-between">
-            <span>
-              Showing {filtered.length} of {total} customers
-            </span>
+            <span>Showing {filtered.length} of {total} customers</span>
             <span className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              Auto-refreshes every 60s
+              <Clock className="w-3 h-3" /> Auto-refreshes every 60s
             </span>
           </div>
         </Card>
@@ -569,19 +395,16 @@ export function UsageEnforcement() {
       {/* Legend */}
       <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Under 80%
+          <Wifi className="w-3.5 h-3.5 text-emerald-500" /> Pinged within 2h
         </span>
         <span className="flex items-center gap-1.5">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> 80–99% —
-          approaching limit
+          <Clock className="w-3.5 h-3.5 text-amber-500" /> Stale — last ping 2–48h ago
         </span>
         <span className="flex items-center gap-1.5">
-          <XCircle className="w-3.5 h-3.5 text-destructive" /> 100%+ — over
-          limit
+          <WifiOff className="w-3.5 h-3.5" /> No ping — not yet installed or offline &gt;48h
         </span>
         <span className="flex items-center gap-1.5">
-          <ShieldOff className="w-3.5 h-3.5" /> Non-managed: limits enforced by
-          license file, not this dashboard
+          <AlertTriangle className="w-3.5 h-3.5 text-destructive" /> Installations at seat limit
         </span>
       </div>
     </DashboardLayout>

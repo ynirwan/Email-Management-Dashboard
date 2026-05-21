@@ -74,8 +74,6 @@ router.get("/", requireAuth, async (req, res) => {
         // License data — null when no license has been issued for this domain yet
         licenseId:        lic?.id         ?? null,
         plan:             lic?.plan        ?? null,
-        emailsPerMonth:   lic?.emailsPerMonth   ?? null,
-        subscribersLimit: lic?.subscribersLimit ?? null,
         status:           lic ? computeLicenseStatus(lic) : "pending",
         isActivated:      lic?.isActivated ?? false,
         isManaged:        lic?.isManaged ?? false,
@@ -85,6 +83,7 @@ router.get("/", requireAuth, async (req, res) => {
             ? toISO(d.expiresAt)
             : null,
         lastPingAt:       lic?.lastPingAt ? toISO(lic.lastPingAt) : null,
+        pingCount:        lic?.pingCount ?? 0,
         createdAt:        toISO(d.createdAt),
       };
     });

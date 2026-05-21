@@ -204,7 +204,10 @@ function SubmitPaymentForm({ onSuccess }: { onSuccess: () => void }) {
 
       {/* Transaction reference */}
       <div>
-        <label className="block text-sm font-medium mb-1">Transaction reference / ID <span className="text-muted-foreground font-normal">(optional)</span></label>
+        <label className="block text-sm font-medium mb-1">
+          Transaction reference / ID
+          <span className="text-muted-foreground font-normal ml-1">(at least one of these two is required)</span>
+        </label>
         <input
           type="text"
           value={transactionRef}
@@ -216,7 +219,10 @@ function SubmitPaymentForm({ onSuccess }: { onSuccess: () => void }) {
 
       {/* Payment proof upload */}
       <div>
-        <label className="block text-sm font-medium mb-1">Payment proof screenshot <span className="text-muted-foreground font-normal">(optional, max 5 MB)</span></label>
+        <label className="block text-sm font-medium mb-1">
+          Payment proof screenshot
+          <span className="text-muted-foreground font-normal ml-1">(or provide transaction ID above — max 5 MB)</span>
+        </label>
         <div
           onClick={() => fileRef.current?.click()}
           className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border hover:border-primary/50 cursor-pointer transition-colors p-6"
@@ -280,30 +286,152 @@ export function UserBilling() {
   const pending  = requests.filter((r) => r.status === "pending").length;
 
   const handleDownloadInvoice = (inv: any) => {
-    const data = {
-      invoiceNo:    inv.invoiceNo,
-      plan:         inv.plan,
-      amount:       `$${Number(inv.amount).toFixed(2)} ${inv.currency ?? "USD"}`,
-      status:       inv.status,
-      description:  inv.description,
-      dueAt:        inv.dueAt   ? fmtDate(inv.dueAt)   : "",
-      paidAt:       inv.paidAt  ? fmtDate(inv.paidAt)  : "",
-      issuedAt:     inv.createdAt ? fmtDate(inv.createdAt) : "",
-    };
-    const text = [
-      `INVOICE: ${data.invoiceNo}`,
-      `Status:  ${data.status.toUpperCase()}`,
-      `Plan:    ${data.plan}`,
-      `Amount:  ${data.amount}`,
-      `Due:     ${data.dueAt}`,
-      data.paidAt ? `Paid:    ${data.paidAt}` : null,
-      data.description ? `\n${data.description}` : null,
-    ].filter(Boolean).join("\n");
-    const blob = new Blob([text], { type: "text/plain" });
+    const issuedAt = inv.createdAt ? fmtDate(inv.createdAt) : "";
+    const dueAt    = inv.dueAt     ? fmtDate(inv.dueAt)     : "";
+    const paidAt   = inv.paidAt    ? fmtDate(inv.paidAt)    : "";
+    const amount   = `$${Number(inv.amount).toFixed(2)}`;
+    const currency = inv.currency ?? "USD";
+    const plan     = inv.plan ?? "";
+    const statusUp = (inv.status ?? "").toUpperCase();
+    const statusColor = inv.status === "paid" ? "#059669" : inv.status === "pending" ? "#d97706" : "#6b7280";
+    const description = inv.description ?? "";
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>${inv.invoiceNo}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f9fafb; color: #111827; padding: 40px 20px; }
+    .page { max-width: 680px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.10); }
+    .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 36px 40px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .brand { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+    .brand-sub { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+    .invoice-label { text-align: right; }
+    .invoice-label h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; color: #fff; }
+    .invoice-label .inv-no { font-size: 13px; color: #94a3b8; margin-top: 4px; font-family: monospace; }
+    .status-bar { background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 14px 40px; display: flex; align-items: center; gap: 10px; }
+    .status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 4px 12px; border-radius: 100px; border: 1.5px solid; }
+    .body { padding: 36px 40px; }
+    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 32px; }
+    .meta-block label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #6b7280; display: block; margin-bottom: 4px; }
+    .meta-block p { font-size: 14px; color: #111827; font-weight: 500; }
+    .line-table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
+    .line-table thead tr { border-bottom: 2px solid #e5e7eb; }
+    .line-table th { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6b7280; padding: 10px 0; text-align: left; }
+    .line-table th:last-child, .line-table td:last-child { text-align: right; }
+    .line-table td { padding: 16px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; }
+    .total-row { display: flex; justify-content: flex-end; }
+    .total-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 24px; min-width: 220px; }
+    .total-box .label { font-size: 12px; color: #6b7280; font-weight: 500; }
+    .total-box .amount { font-size: 26px; font-weight: 800; color: #111827; margin-top: 4px; letter-spacing: -0.5px; }
+    .total-box .currency { font-size: 13px; color: #9ca3af; font-weight: 500; }
+    .note-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px 18px; margin-top: 28px; font-size: 13px; color: #065f46; }
+    .desc-box { background: #f8fafc; border-radius: 8px; padding: 14px 18px; margin-top: 16px; font-size: 13px; color: #4b5563; }
+    .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 40px; display: flex; justify-content: space-between; align-items: center; }
+    .footer p { font-size: 12px; color: #9ca3af; }
+    @media print {
+      body { background: none; padding: 0; }
+      .page { box-shadow: none; border-radius: 0; max-width: 100%; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div style="text-align:center; margin-bottom: 16px;" class="no-print">
+    <button onclick="window.print()" style="background:#1a1a2e;color:#fff;border:none;padding:10px 28px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+      ⬇ Save as PDF / Print
+    </button>
+  </div>
+  <div class="page">
+    <div class="header">
+      <div>
+        <div class="brand">ZeniPost</div>
+        <div class="brand-sub">Email Infrastructure Platform</div>
+      </div>
+      <div class="invoice-label">
+        <h1>Invoice</h1>
+        <div class="inv-no">${inv.invoiceNo}</div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <span class="status-pill" style="color:${statusColor}; border-color:${statusColor}20; background:${statusColor}10;">
+        ${statusUp}
+      </span>
+      ${paidAt ? `<span style="font-size:13px;color:#6b7280;">Paid on ${paidAt}</span>` : `<span style="font-size:13px;color:#6b7280;">Due ${dueAt}</span>`}
+    </div>
+
+    <div class="body">
+      <div class="meta-grid">
+        <div class="meta-block">
+          <label>Issued</label>
+          <p>${issuedAt}</p>
+        </div>
+        <div class="meta-block">
+          <label>Due date</label>
+          <p>${dueAt}</p>
+        </div>
+        ${paidAt ? `
+        <div class="meta-block">
+          <label>Paid on</label>
+          <p style="color:#059669; font-weight:700;">${paidAt}</p>
+        </div>` : ""}
+        <div class="meta-block">
+          <label>Plan</label>
+          <p>${plan}</p>
+        </div>
+      </div>
+
+      <table class="line-table">
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th>Plan</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="color:#374151;">${description || "License subscription"}</td>
+            <td style="color:#374151; text-transform:capitalize;">${plan}</td>
+            <td style="font-weight:700;">${amount}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="total-row">
+        <div class="total-box">
+          <div class="label">Total Due</div>
+          <div class="amount">${amount}</div>
+          <div class="currency">${currency}</div>
+        </div>
+      </div>
+
+      ${inv.status === "paid" ? `<div class="note-box">✅ Payment received. Thank you!</div>` : ""}
+    </div>
+
+    <div class="footer">
+      <p>ZeniPost · support@zenipost.com</p>
+      <p>${inv.invoiceNo} · Generated ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: "text/html" });
     const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href = url; a.download = `${inv.invoiceNo}.txt`; a.click();
-    URL.revokeObjectURL(url);
+    const win  = window.open(url, "_blank");
+    // Also trigger auto-print if the tab opens successfully
+    if (win) {
+      win.addEventListener("load", () => {
+        // Give the page a moment to render before auto-prompting print
+        setTimeout(() => win.print(), 400);
+      });
+    }
+    // Revoke after a delay to allow the blob to load
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
   };
 
   return (

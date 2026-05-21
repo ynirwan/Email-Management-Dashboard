@@ -36,16 +36,15 @@ interface Domain {
   domain: string;
   rootDomain: string;
   // License data — null when no license has been issued yet ("pending")
-  licenseId:        number | null;
-  plan:             string | null;
-  emailsPerMonth:   number | null;
-  subscribersLimit: number | null;
+  licenseId:   number | null;
+  plan:        string | null;
   status: "active" | "expiring" | "revoked" | "expired" | "pending";
-  isActivated:      boolean;
-  isManaged:        boolean;
-  expiresAt: string | null;
-  createdAt: string;
-  lastPingAt: string | null;
+  isActivated: boolean;
+  isManaged:   boolean;
+  expiresAt:   string | null;
+  createdAt:   string;
+  lastPingAt:  string | null;
+  pingCount:   number;
 }
 
 interface DomainsResponse {
@@ -53,12 +52,6 @@ interface DomainsResponse {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmt(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
-  return String(n);
-}
 
 function daysUntil(dateStr: string) {
   return differenceInDays(parseISO(dateStr), new Date());
@@ -240,19 +233,7 @@ function DomainCard({
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-border/50 pt-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Emails/mo limit</p>
-            <p className="text-sm font-semibold">
-              {domain.emailsPerMonth != null ? fmt(domain.emailsPerMonth) : "—"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Subscriber limit</p>
-            <p className="text-sm font-semibold">
-              {domain.subscribersLimit != null ? fmt(domain.subscribersLimit) : "—"}
-            </p>
-          </div>
+        <div className="grid grid-cols-2 gap-3 border-t border-border/50 pt-4">
           <div>
             <p className="text-xs text-muted-foreground">License expires</p>
             <p
@@ -285,6 +266,11 @@ function DomainCard({
                     addSuffix: true,
                   })
                 : "Never"}
+              {domain.pingCount > 0 && (
+                <span className="text-[11px] text-muted-foreground font-normal ml-1.5">
+                  ({domain.pingCount} total)
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -628,10 +614,9 @@ export function Domains() {
           <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/40 border border-border/50 rounded-xl px-4 py-3">
             <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span>
-              Limits (emails/month, subscriber count) are enforced directly by
-              your license file — not by this dashboard. Renew annually to keep
-              your license active. Managed customers additionally have live
-              usage visibility.
+              Features are gated by your license plan. Renew annually to keep
+              your license active. The app pings this dashboard once a day to
+              confirm license validity — "Last ping" shows when it last checked in.
             </span>
           </div>
 

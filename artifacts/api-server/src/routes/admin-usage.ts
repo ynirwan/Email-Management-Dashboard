@@ -2,13 +2,14 @@
 //
 // GET /api/admin/usage
 // Returns all customers with their license/domain info for the Usage Enforcement panel.
-// Non-managed: shows license file limits (enforced by the email app itself)
-// Managed:     shows live emailsUsed/emailsLimit/subscribersUsed pulled from users table
+// Platform is feature-gated — no email/subscriber quotas displayed.
+// Shows: plan, installations used vs seat limit, domain, ping status.
 //
 import { Router } from "express";
 import { db, licensesTable, usersTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
+import { PLAN_DEFINITIONS } from "./plans.js";
 
 const router = Router();
 
@@ -24,12 +25,30 @@ function computeStatus(
   return "active";
 }
 
+function toISO(v: any): string | null {
+  if (!v) return null;
+  return v instanceof Date ? v.toISOString() : String(v);
+}
+
+function parseIds(raw: string | null): string[] {
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch { return []; }
+}
+
 // GET /api/admin/usage
 router.get("/", requireAdmin, async (req, res) => {
   try {
     // Fetch all non-admin users
     const users = await db
-      .select()
+      .select({
+        id:        usersTable.id,
+        name:      usersTable.name,
+        email:     usersTable.email,
+        company:   usersTable.company,
+        plan:      usersTable.plan,
+        isActive:  usersTable.isActive,
+        createdAt: usersTable.createdAt,
+      })
       .from(usersTable)
       .where(eq(usersTable.role, "user"))
       .orderBy(usersTable.createdAt);
@@ -39,16 +58,48 @@ router.get("/", requireAdmin, async (req, res) => {
       return;
     }
 
-    const userIds = users.map((u) => u.id);
-
-    // Fetch all licenses for these users
-    const licenses = await db
-      .select()
-      .from(licensesTable)
-      .orderBy(licensesTable.createdAt);
+    // Fetch licenses with explicit columns — avoids crashing when a new column
+    // (e.g. installation_ids) has been added to the schema but the migration
+    // hasn't been applied yet.  Add installationIds only if the column exists.
+    let licenses: any[] = [];
+    try {
+      licenses = await db
+        .select({
+          id:                 licensesTable.id,
+          customerId:         licensesTable.customerId,
+          domain:             licensesTable.domain,
+          plan:               licensesTable.plan,
+          isManaged:          licensesTable.isManaged,
+          adminAccessEnabled: licensesTable.adminAccessEnabled,
+          lastPingAt:         licensesTable.lastPingAt,
+          pingCount:          licensesTable.pingCount,
+          expiresAt:          licensesTable.expiresAt,
+          revokedAt:          licensesTable.revokedAt,
+          installationIds:    licensesTable.installationIds,
+        })
+        .from(licensesTable)
+        .orderBy(licensesTable.createdAt);
+    } catch {
+      // installationIds column not yet migrated — fall back without it
+      licenses = await db
+        .select({
+          id:                 licensesTable.id,
+          customerId:         licensesTable.customerId,
+          domain:             licensesTable.domain,
+          plan:               licensesTable.plan,
+          isManaged:          licensesTable.isManaged,
+          adminAccessEnabled: licensesTable.adminAccessEnabled,
+          lastPingAt:         licensesTable.lastPingAt,
+          pingCount:          licensesTable.pingCount,
+          expiresAt:          licensesTable.expiresAt,
+          revokedAt:          licensesTable.revokedAt,
+        })
+        .from(licensesTable)
+        .orderBy(licensesTable.createdAt);
+    }
 
     // Group licenses by customerId
-    const licsByCustomer: Record<number, typeof licenses> = {};
+    const licsByCustomer: Record<number, any[]> = {};
     for (const lic of licenses) {
       if (!licsByCustomer[lic.customerId]) licsByCustomer[lic.customerId] = [];
       licsByCustomer[lic.customerId].push(lic);
@@ -57,46 +108,47 @@ router.get("/", requireAdmin, async (req, res) => {
     const customers = users.map((user) => {
       const userLicenses = licsByCustomer[user.id] ?? [];
 
-      // Primary license = most recently created active one, or just first
       const activeLics = userLicenses.filter(
         (l) => computeStatus(l) === "active" || computeStatus(l) === "expiring",
       );
       const primaryLic = activeLics[0] ?? userLicenses[0] ?? null;
 
-      // isManaged: true if ANY license for this customer is managed
       const isManaged = userLicenses.some((l) => l.isManaged);
 
+      // Installation seat tracking — aggregate across all licenses
+      const installationIds: string[] = [];
+      for (const l of userLicenses) {
+        for (const id of parseIds(l.installationIds ?? null)) {
+          if (!installationIds.includes(id)) installationIds.push(id);
+        }
+      }
+
+      // Seat limit from the plan definition
+      const planDef = PLAN_DEFINITIONS.find((p) => p.id === (primaryLic?.plan ?? user.plan));
+      const seatLimit = planDef?.installations ?? 1;
+
       return {
-        userId: user.id,
-        name: user.name,
-        email: user.email,
-        company: user.company ?? null,
-        plan: user.plan,
-        isActive: user.isActive,
-        // Usage fields — from users table (updated by managed heartbeat or admin)
-        emailsUsed: user.emailsUsed,
-        emailsLimit: user.emailsLimit,
-        subscribersUsed: user.subscribersUsed,
-        subscribersLimit: user.subscribersLimit,
-        // Primary license info
-        licenseId: primaryLic?.id ?? null,
-        domain: primaryLic?.domain ?? null,
-        licenseStatus: primaryLic ? computeStatus(primaryLic) : null,
+        userId:             user.id,
+        name:               user.name,
+        email:              user.email,
+        company:            user.company ?? null,
+        plan:               primaryLic?.plan ?? user.plan,
+        isActive:           user.isActive,
+        // License info
+        licenseId:          primaryLic?.id ?? null,
+        domain:             primaryLic?.domain ?? null,
+        licenseStatus:      primaryLic ? computeStatus(primaryLic) : null,
         isManaged,
         adminAccessEnabled: primaryLic?.adminAccessEnabled ?? false,
-        lastPingAt: primaryLic?.lastPingAt
-          ? primaryLic.lastPingAt instanceof Date
-            ? primaryLic.lastPingAt.toISOString()
-            : primaryLic.lastPingAt
-          : null,
-        expiresAt: primaryLic?.expiresAt
-          ? primaryLic.expiresAt instanceof Date
-            ? primaryLic.expiresAt.toISOString()
-            : primaryLic.expiresAt
-          : null,
+        lastPingAt:         toISO(primaryLic?.lastPingAt),
+        pingCount:          primaryLic?.pingCount ?? 0,
+        expiresAt:          toISO(primaryLic?.expiresAt),
         // Counts
-        totalLicenses: userLicenses.length,
-        activeLicenses: activeLics.length,
+        totalLicenses:      userLicenses.length,
+        activeLicenses:     activeLics.length,
+        // Installation seat tracking
+        installationIds,
+        seatLimit,
       };
     });
 
