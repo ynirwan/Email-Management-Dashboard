@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { db, usersTable, invoicesTable, licensesTable } from "@workspace/db";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, isNull } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../lib/auth.js";
 import { PLAN_DEFINITIONS } from "./plans.js";
+import { buildLicensePayload } from "../lib/license-builder.js";
+import jwt from "jsonwebtoken";
+
+const LICENSE_SECRET = process.env["LICENSE_SECRET"] || "zenipost-license-secret-2026";
 
 const router = Router();
 
@@ -124,9 +128,34 @@ router.post("/upgrade", requireAdmin, async (req, res) => {
       .set({ plan, emailsLimit: limits.emailsLimit, subscribersLimit: limits.subscribersLimit })
       .where(eq(usersTable.id, parseInt(customerId))).returning();
 
-    await db.update(licensesTable)
-      .set({ plan: plan as any, emailsPerMonth: limits.emailsLimit, subscribersLimit: limits.subscribersLimit, features: JSON.stringify(features), updatedAt: new Date() })
-      .where(and(eq(licensesTable.customerId, parseInt(customerId)), eq(licensesTable.status, "active")));
+    // Update plan on all non-revoked licenses for this customer.
+    // Use isNull(revokedAt) — the stored `status` enum column is never updated
+    // by the revoke/expire flows, so it's not a reliable filter here.
+    const updatedLicenses = await db.update(licensesTable)
+      .set({
+        plan:             plan as any,
+        emailsPerMonth:   limits.emailsLimit,
+        subscribersLimit: limits.subscribersLimit,
+        features:         JSON.stringify(features),
+        updatedAt:        new Date(),
+      })
+      .where(and(eq(licensesTable.customerId, parseInt(customerId)), isNull(licensesTable.revokedAt)))
+      .returning();
+
+    // Re-sign each updated license so the email-app picks up the new plan
+    // on its next ping / license download.
+    for (const lic of updatedLicenses) {
+      try {
+        const payload   = buildLicensePayload(lic, upd);
+        const signature = jwt.sign(payload, LICENSE_SECRET, { algorithm: "HS256" });
+        await db.update(licensesTable)
+          .set({ signature, updatedAt: new Date() })
+          .where(eq(licensesTable.id, lic.id));
+      } catch {
+        // Re-sign failure is non-fatal — the license is still updated in the DB;
+        // the email-app will get the new plan on its next re-download.
+      }
+    }
 
     const now     = new Date();
     const dueDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);

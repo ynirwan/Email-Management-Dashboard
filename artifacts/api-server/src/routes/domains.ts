@@ -12,6 +12,10 @@ import { db, domainsTable, usersTable, licensesTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { PLAN_DEFINITIONS } from "./plans.js";
+import { buildLicensePayload } from "../lib/license-builder.js";
+import jwt from "jsonwebtoken";
+
+const LICENSE_SECRET = process.env["LICENSE_SECRET"] || "zenipost-license-secret-2026";
 import { PLAN_FEATURE_FLAGS } from "@workspace/db/schema/feature-flags.js";
 
 const router = Router();
@@ -168,6 +172,35 @@ router.post("/", requireAuth, async (req, res) => {
       }).returning();
       licenseId = newLic?.id ?? null;
     } else {
+      // Existing license found (e.g. domain was re-added after deletion, or created
+      // via another flow). Bring it up to date with the user's current plan so the
+      // domain card always reflects the correct tier.
+      const updFields = {
+        customerId:       user.id,
+        plan:             userPlan,
+        emailsPerMonth:   planDef?.emailsPerMonth   ?? 100000,
+        subscribersLimit: planDef?.subscribersLimit ?? 25000,
+        features:         JSON.stringify(PLAN_FEATURE_FLAGS[userPlan] ?? PLAN_FEATURE_FLAGS["starter"]),
+        // Reset revocation so the domain is usable again after re-add
+        revokedAt:        null,
+        // Reset activation gate — admin still needs to confirm payment
+        isActivated:      false,
+        updatedAt:        new Date(),
+      };
+      const [reused] = await db.update(licensesTable)
+        .set(updFields)
+        .where(eq(licensesTable.id, existingLic[0].id))
+        .returning();
+      // Re-sign with fresh plan data
+      if (reused) {
+        try {
+          const payload   = buildLicensePayload(reused, { id: user.id, name: user.name, email: user.email, company: user.company });
+          const signature = jwt.sign(payload, LICENSE_SECRET, { algorithm: "HS256" });
+          await db.update(licensesTable)
+            .set({ signature })
+            .where(eq(licensesTable.id, reused.id));
+        } catch { /* non-fatal */ }
+      }
       licenseId = existingLic[0].id;
     }
 
@@ -194,6 +227,9 @@ router.delete("/:id", requireAuth, async (req, res) => {
       res.status(403).json({ error: "Forbidden", message: "You don't own this domain" }); return;
     }
 
+    // Delete the associated license first so that re-adding the same domain
+    // always creates a fresh license with the user's current plan.
+    await db.delete(licensesTable).where(eq(licensesTable.domain, domain.domain));
     await db.delete(domainsTable).where(eq(domainsTable.id, id));
     res.json({ message: "Domain removed successfully" });
   } catch (err) {
