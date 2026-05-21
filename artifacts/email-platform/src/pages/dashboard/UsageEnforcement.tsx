@@ -327,7 +327,7 @@ export function UsageEnforcement() {
 
                       {/* Installations */}
                       <td className="px-5 py-4">
-                        <SeatsPill used={c.installationIds.length} limit={c.seatLimit} />
+                        <SeatsPill used={(c.installationIds ?? []).length} limit={c.seatLimit} />
                         {c.totalLicenses > 1 && (
                           <div className="text-[10px] text-muted-foreground mt-1">
                             {c.activeLicenses} / {c.totalLicenses} licenses active
