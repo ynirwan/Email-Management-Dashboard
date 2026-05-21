@@ -11,25 +11,39 @@ import { CheckCircle2, Check, Minus, Edit2 } from "lucide-react";
 //   license.py _PLAN_DEFAULTS + _V2_FLAG_MAP
 //
 // ALL plans  → campaigns, email builder, subscribers, analytics, suppression,
-//              custom_domains, webhooks, segmentation (default=True all plans),
+//              webhooks, segmentation (default=True all plans),
 //              audit_trail (default=True all plans)
+// Domains    → Starter: license domain only (max_domains=0)
+//              Pro: up to 5 custom domains + 1 tracking subdomain each (max_domains=5)
+//              Agency: unlimited domains (max_domains=-1)
 // Pro+       → automation, ab_testing, api_access, deliverability_dashboard
-const FEATURE_MATRIX = [
+//
+// Row shape: boolean true/false → Check / Minus icon
+//            string             → renders as plain text (used for tiered limits)
+const FEATURE_MATRIX: {
+  label: string;
+  starter: boolean | string;
+  pro: boolean | string;
+  agency: boolean | string;
+  note: string;
+}[] = [
   // ── All plans ─────────────────────────────────────────────────────────────
-  { label: "Campaign Management",         starter: true,  pro: true,  agency: true,  note: "" },
-  { label: "Email Builder (all editors)", starter: true,  pro: true,  agency: true,  note: "" },
-  { label: "Subscriber Management",       starter: true,  pro: true,  agency: true,  note: "" },
-  { label: "Basic Analytics",             starter: true,  pro: true,  agency: true,  note: "" },
-  { label: "Suppression Management",      starter: true,  pro: true,  agency: true,  note: "" },
-  { label: "Custom Sending Domains",      starter: true,  pro: true,  agency: true,  note: "" },
-  { label: "Webhooks",                    starter: true,  pro: true,  agency: true,  note: "" },
-  { label: "Audience Segmentation",       starter: true,  pro: true,  agency: true,  note: "Segment by any field or tag" },
-  { label: "Audit Trail",                 starter: true,  pro: true,  agency: true,  note: "Full activity history" },
+  { label: "Campaign Management",         starter: true,             pro: true,           agency: true,        note: "" },
+  { label: "Email Builder (all editors)", starter: true,             pro: true,           agency: true,        note: "" },
+  { label: "Subscriber Management",       starter: true,             pro: true,           agency: true,        note: "" },
+  { label: "Basic Analytics",             starter: true,             pro: true,           agency: true,        note: "" },
+  { label: "Suppression Management",      starter: true,             pro: true,           agency: true,        note: "" },
+  { label: "Webhooks",                    starter: true,             pro: true,           agency: true,        note: "" },
+  { label: "Audience Segmentation",       starter: true,             pro: true,           agency: true,        note: "Segment by any field or tag" },
+  { label: "Audit Trail",                 starter: true,             pro: true,           agency: true,        note: "Full activity history" },
+  // ── Domains ───────────────────────────────────────────────────────────────
+  { label: "Sending Domains",             starter: "License domain", pro: "Up to 5",      agency: "Unlimited", note: "" },
+  { label: "Tracking Domain per Sender",  starter: false,            pro: "1 per domain", agency: "1 per domain", note: "Click / open / unsubscribe" },
   // ── Pro & Agency ──────────────────────────────────────────────────────────
-  { label: "Automation Workflows",        starter: false, pro: true,  agency: true,  note: "" },
-  { label: "A/B Testing",                 starter: false, pro: true,  agency: true,  note: "" },
-  { label: "API Access",                  starter: false, pro: true,  agency: true,  note: "" },
-  { label: "Deliverability Dashboard",    starter: false, pro: true,  agency: true,  note: "Inbox placement & reputation" },
+  { label: "Automation Workflows",        starter: false,            pro: true,           agency: true,        note: "" },
+  { label: "A/B Testing",                 starter: false,            pro: true,           agency: true,        note: "" },
+  { label: "API Access",                  starter: false,            pro: true,           agency: true,        note: "" },
+  { label: "Deliverability Dashboard",    starter: false,            pro: true,           agency: true,        note: "Inbox placement & reputation" },
 ];
 
 export function Plans() {
@@ -151,9 +165,17 @@ export function Plans() {
                 </thead>
                 <tbody className="divide-y divide-border/40">
                   {FEATURE_MATRIX.map((row, i) => {
-                    const isProStart = i === 9; // Automation Workflows
+                    const isDomainsStart = i === 8;  // Sending Domains
+                    const isProStart     = i === 10; // Automation Workflows
                     return (
                       <>
+                        {isDomainsStart && (
+                          <tr key="domains-divider">
+                            <td colSpan={4} className="px-6 py-2 bg-muted/40 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                              Domains
+                            </td>
+                          </tr>
+                        )}
                         {isProStart && (
                           <tr key="pro-divider">
                             <td colSpan={4} className="px-6 py-2 bg-primary/5 text-[10px] font-bold text-primary uppercase tracking-widest">
@@ -166,15 +188,20 @@ export function Plans() {
                             <span className="font-medium">{row.label}</span>
                             {row.note && <span className="ml-2 text-xs text-muted-foreground">— {row.note}</span>}
                           </td>
-                          {(["starter", "pro", "agency"] as const).map((plan) => (
-                            <td key={plan} className="px-4 py-3 text-center">
-                              {row[plan] ? (
-                                <Check className="w-4 h-4 text-primary mx-auto" />
-                              ) : (
-                                <Minus className="w-4 h-4 text-border mx-auto" />
-                              )}
-                            </td>
-                          ))}
+                          {(["starter", "pro", "agency"] as const).map((plan) => {
+                            const val = row[plan];
+                            return (
+                              <td key={plan} className="px-4 py-3 text-center">
+                                {typeof val === "string" ? (
+                                  <span className="text-xs font-semibold text-foreground">{val}</span>
+                                ) : val ? (
+                                  <Check className="w-4 h-4 text-primary mx-auto" />
+                                ) : (
+                                  <Minus className="w-4 h-4 text-border mx-auto" />
+                                )}
+                              </td>
+                            );
+                          })}
                         </tr>
                       </>
                     );

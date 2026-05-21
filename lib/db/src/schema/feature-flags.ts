@@ -18,7 +18,7 @@ export const FEATURE_FLAGS = [
   "subscriber_management",     // Import, manage, export contacts
   "analytics_basic",           // Open/click/bounce rates per campaign
   "suppression_list",          // Global + list-level suppression
-  "custom_domains",            // Custom sending + tracking domains
+  "custom_domains",            // Custom domains: 5 on Pro, unlimited on Agency (Starter uses license domain)
   "webhooks",                  // Outbound webhook triggers
   "segmentation_advanced",     // 8-filter audience segmentation (default=True all plans)
   "audit_logs",                // Full activity audit trail (default=True all plans)
@@ -46,7 +46,6 @@ export const PLAN_FEATURE_FLAGS: Record<string, FeatureFlag[]> = {
     "subscriber_management",
     "analytics_basic",
     "suppression_list",
-    "custom_domains",
     "webhooks",
     "segmentation_advanced",
     "audit_logs",
@@ -91,7 +90,7 @@ export const FEATURE_LABELS: Record<FeatureFlag, string> = {
   subscriber_management: "Subscriber Management",
   analytics_basic:       "Basic Analytics",
   suppression_list:      "Suppression Management",
-  custom_domains:        "Custom Sending Domains",
+  custom_domains:        "Custom Domains (5 on Pro / Unlimited on Agency)",
   webhooks:              "Webhooks",
   segmentation_advanced: "Audience Segmentation",
   audit_logs:            "Audit Trail",

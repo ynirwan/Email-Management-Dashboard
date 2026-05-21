@@ -670,12 +670,12 @@ export function Landing() {
       installsLabel: "1",
       popular: true,
       features: [
-        "1 server or domain installation",
+        "1 server installation",
+        "1 sending domain (from your license)",
         "Campaign management",
         "Email builder (drag-and-drop, HTML, visual)",
         "Subscriber management & segmentation",
         "Analytics & suppression management",
-        "Send from your own domain",
         "Real-time webhooks",
         "Full audit trail",
         "Lifetime software updates",
@@ -691,6 +691,8 @@ export function Landing() {
       features: [
         "Everything in Starter",
         "Up to 3 installations",
+        "Up to 5 custom sending domains",
+        "1 click/open/unsubscribe tracking domain per sending domain",
         "Automation workflows",
         "A/B testing",
         "REST API access",
@@ -709,6 +711,7 @@ export function Landing() {
       features: [
         "Everything in Pro",
         "Unlimited installations",
+        "Unlimited sending domains",
         "Multiple user accounts per install",
         "Lifetime software updates",
       ],

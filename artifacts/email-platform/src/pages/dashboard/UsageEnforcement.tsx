@@ -418,7 +418,7 @@ export function UsageEnforcement() {
                     Plan
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Emails / Month
+                    Emails
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Subscribers
@@ -490,14 +490,11 @@ export function UsageEnforcement() {
                             label="Emails"
                           />
                         ) : (
-                          /* Non-managed: quota is enforced by the license file itself */
                           <div className="text-xs text-muted-foreground space-y-0.5">
-                            <div className="font-medium text-foreground">
-                              {fmt(c.emailsLimit)}/mo
-                            </div>
+                            <div className="font-medium text-foreground">Unlimited</div>
                             <div className="flex items-center gap-1 text-muted-foreground">
                               <ShieldOff className="w-3 h-3" />
-                              License-enforced
+                              Feature-gated
                             </div>
                           </div>
                         )}
@@ -513,12 +510,10 @@ export function UsageEnforcement() {
                           />
                         ) : (
                           <div className="text-xs text-muted-foreground space-y-0.5">
-                            <div className="font-medium text-foreground">
-                              {fmt(c.subscribersLimit)} limit
-                            </div>
+                            <div className="font-medium text-foreground">Unlimited</div>
                             <div className="flex items-center gap-1 text-muted-foreground">
                               <ShieldOff className="w-3 h-3" />
-                              License-enforced
+                              Feature-gated
                             </div>
                           </div>
                         )}
