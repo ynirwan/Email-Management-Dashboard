@@ -915,7 +915,7 @@ export function Licenses() {
   const activeCnt    = licenses.filter((l) => l.status === "active").length;
   const expiringCnt  = licenses.filter((l) => l.status === "expiring").length;
   const revokedCnt   = licenses.filter((l) => l.status === "revoked").length;
-  const awaitingCnt  = licenses.filter((l) => !l.isActivated).length;
+  const awaitingCnt  = licenses.filter((l) => !l.isActivated && !l.revokedAt).length;
   const expiringSoon = licenses.filter((l) => l.status === "expiring");
 
   const handleActivate = (lic: any) => {
@@ -1209,7 +1209,9 @@ export function Licenses() {
 
                         {/* Status */}
                         <td className="px-5 py-3.5">
-                          {!lic.isActivated ? (
+                          {lic.revokedAt ? (
+                            statusBadge("revoked")
+                          ) : !lic.isActivated ? (
                             <Badge className="gap-1.5 bg-blue-500/10 text-blue-600 border border-blue-300/50">
                               <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
                               Awaiting
@@ -1252,8 +1254,8 @@ export function Licenses() {
                         {/* Actions */}
                         <td className="px-5 py-3.5">
                           <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                            {/* Activate — only shown for unactivated (payment-pending) licenses */}
-                            {!lic.isActivated && (
+                            {/* Activate — only shown for unactivated, non-revoked licenses */}
+                            {!lic.isActivated && !lic.revokedAt && (
                               <Button
                                 size="sm"
                                 className="gap-1.5 h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700"
