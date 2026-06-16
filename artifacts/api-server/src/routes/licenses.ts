@@ -17,6 +17,7 @@ import jwt from "jsonwebtoken";
 import { PLAN_FEATURE_FLAGS, FEATURE_LABELS } from "@workspace/db/schema/feature-flags.js";
 import { PLAN_DEFINITIONS } from "./plans.js";
 import { buildLicensePayload } from "../lib/license-builder.js";
+import { encryptLicense } from "../lib/license-crypto.js";
 
 const router = Router();
 
@@ -227,11 +228,15 @@ router.get("/:id/download", requireAdmin, async (req, res) => {
     const { lic, owner } = rows[0];
     const licensePayload = buildLicensePayload(lic, owner);
     const signature      = signPayload(licensePayload);
-    const licenseFile    = { ...licensePayload, signature };
+    const fullPayload    = { ...licensePayload, signature };
 
-    res.setHeader("Content-Disposition", `attachment; filename="zenipost-license-${lic.domain}.json"`);
-    res.setHeader("Content-Type", "application/json");
-    res.json(licenseFile);
+    // Encrypt the full payload with AES-256-GCM so the .lic file is not
+    // human-readable. The email-app decrypts with the same LICENSE_SECRET.
+    const encryptedBlob  = encryptLicense(fullPayload, LICENSE_SECRET);
+
+    res.setHeader("Content-Disposition", `attachment; filename="zenipost-license-${lic.domain}.lic"`);
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.send(encryptedBlob);
   } catch (err) {
     console.error("GET /licenses/:id/download error:", err);
     res.status(500).json({ error: "Internal Server Error" });
