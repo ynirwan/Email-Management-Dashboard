@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchApi } from "@/lib/api";
+import { fetchApi, isSessionActive } from "@/lib/api";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 
@@ -34,7 +34,9 @@ export function useAuth() {
   const { data: user, isLoading, error } = useQuery<User>({
     queryKey: ["/api/auth/me"],
     queryFn: () => fetchApi("/api/auth/me"),
-    enabled: !!localStorage.getItem("token"),
+    // Gate on the non-httpOnly flag cookie — avoids a round-trip on logged-out pages
+    // while still fetching on app load when a session is active.
+    enabled: isSessionActive(),
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
@@ -45,7 +47,8 @@ export function useAuth() {
       body: JSON.stringify(credentials)
     }),
     onSuccess: (data) => {
-      localStorage.setItem("token", data.token);
+      // Server sets the httpOnly JWT cookie and a non-httpOnly `logged_in` flag.
+      // No localStorage writes — the cookie is the source of truth.
       queryClient.setQueryData(["/api/auth/me"], data.user);
       setLocation("/dashboard");
     }
@@ -56,17 +59,15 @@ export function useAuth() {
       method: "POST",
       body: JSON.stringify(userData)
     }),
-    onSuccess: (data) => {
-      localStorage.setItem("token", data.token);
-      queryClient.setQueryData(["/api/auth/me"], data.user);
-      setLocation("/dashboard");
-    }
+    // Backend returns { message, userId } — no token yet (email verification required).
   });
 
   const logoutMutation = useMutation({
     mutationFn: () => fetchApi("/api/auth/logout", { method: "POST" }).catch(() => {}),
     onSettled: () => {
-      localStorage.removeItem("token");
+      // Server clears the auth cookies; clear the flag manually too so the
+      // enabled guard flips before the next render.
+      document.cookie = "logged_in=; path=/; max-age=0; SameSite=Strict";
       queryClient.setQueryData(["/api/auth/me"], null);
       queryClient.clear();
       setLocation("/");
@@ -82,5 +83,7 @@ export function useAuth() {
     logout: logoutMutation.mutate,
     isLoggingIn: loginMutation.isPending,
     isRegistering: registerMutation.isPending,
+    registerSuccess: registerMutation.isSuccess,
+    registerMessage: (registerMutation.data as any)?.message ?? null,
   };
 }

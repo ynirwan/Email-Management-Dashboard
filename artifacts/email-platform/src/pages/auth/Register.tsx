@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link } from "wouter";
-import { Mail, AlertCircle } from "lucide-react";
+import { Mail, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button, Input, Label, Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/core";
 import { useAuth } from "@/hooks/use-auth";
 import { useState } from "react";
@@ -17,7 +17,7 @@ const registerSchema = z.object({
 type RegisterForm = z.infer<typeof registerSchema>;
 
 export function Register() {
-  const { register: registerUser, isRegistering } = useAuth();
+  const { register: registerUser, isRegistering, registerSuccess, registerMessage } = useAuth();
   const [error, setError] = useState<string | null>(null);
 
   const { register, handleSubmit, formState: { errors } } = useForm<RegisterForm>({
@@ -51,6 +51,21 @@ export function Register() {
             <CardDescription className="text-base">Start your 14-day free trial today.</CardDescription>
           </CardHeader>
           <CardContent>
+            {registerSuccess ? (
+              <div className="py-6 flex flex-col items-center gap-4 text-center">
+                <CheckCircle2 className="w-12 h-12 text-green-500" />
+                <p className="text-base font-semibold text-foreground">
+                  {registerMessage ?? "Account created!"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Please check your email and verify your address before signing in.
+                </p>
+                <Link href="/login" className="text-sm font-semibold text-primary hover:underline mt-2">
+                  Back to sign in
+                </Link>
+              </div>
+            ) : (
+            <>
             {error && (
               <div className="mb-6 p-4 rounded-xl bg-destructive/10 text-destructive text-sm font-medium flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 shrink-0" />
@@ -93,6 +108,8 @@ export function Register() {
                 Sign in
               </Link>
             </div>
+            </>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -1,9 +1,63 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { randomBytes } from "crypto";
+import { rateLimit } from "express-rate-limit";
 import { hashPassword, verifyPassword, createToken, requireAuth } from "../lib/auth.js";
 import { sendMail, buildPasswordResetEmail, buildVerificationEmail } from "../lib/mailer.js";
+
+// ── Auth cookie helpers ───────────────────────────────────────────────────────
+
+const JWT_COOKIE      = "access_token";
+const SESSION_FLAG    = "logged_in";     // non-httpOnly; JS reads this to detect a session
+const JWT_MAX_AGE_MS  = 7 * 24 * 60 * 60; // 7 days in seconds (matches JWT_EXPIRES_IN)
+
+function setAuthCookies(res: Response, token: string, req: Request): void {
+  const secure = req.secure || req.headers["x-forwarded-proto"] === "https";
+  res.cookie(JWT_COOKIE, token, {
+    httpOnly:  true,
+    sameSite:  "strict",
+    secure,
+    maxAge:    JWT_MAX_AGE_MS * 1000,
+    path:      "/",
+  });
+  // Readable by JS — lets the frontend detect a session without a round-trip.
+  // Does NOT contain the JWT itself.
+  res.cookie(SESSION_FLAG, "1", {
+    httpOnly:  false,
+    sameSite:  "strict",
+    secure,
+    maxAge:    JWT_MAX_AGE_MS * 1000,
+    path:      "/",
+  });
+}
+
+function clearAuthCookies(res: Response): void {
+  res.clearCookie(JWT_COOKIE,   { path: "/" });
+  res.clearCookie(SESSION_FLAG, { path: "/" });
+}
+
+// ── Auth rate limiters ────────────────────────────────────────────────────────
+// Scoped tightly to auth routes — does not affect the rest of the API.
+// All limits are per-IP (default key = req.ip).
+
+/** Login: 10 attempts per 15 minutes. Blocks credential-stuffing / brute force. */
+const loginLimiter = rateLimit({
+  windowMs:         15 * 60 * 1000,
+  max:              10,
+  standardHeaders:  "draft-7",
+  legacyHeaders:    false,
+  message: { error: "Too Many Requests", message: "Too many login attempts. Please wait 15 minutes and try again." },
+});
+
+/** Forgot-password / resend-verification: 5 per 15 minutes. Prevents email bombing. */
+const emailActionLimiter = rateLimit({
+  windowMs:         15 * 60 * 1000,
+  max:              5,
+  standardHeaders:  "draft-7",
+  legacyHeaders:    false,
+  message: { error: "Too Many Requests", message: "Too many requests. Please wait 15 minutes and try again." },
+});
 
 const router = Router();
 
@@ -12,7 +66,7 @@ function serializeUser(user: any) {
   return rest;
 }
 
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -30,6 +84,8 @@ router.post("/login", async (req, res) => {
       res.status(401).json({ error: "Unauthorized", message: reason, code: "ACCOUNT_INACTIVE" }); return;
     }
     const token = createToken({ userId: user.id, email: user.email, role: user.role });
+    setAuthCookies(res, token, req);
+    // Body still includes token for API clients; browser sessions should rely on the cookie.
     res.json({ token, user: serializeUser(user) });
   } catch (err) {
     console.error("Login error:", err);
@@ -140,7 +196,7 @@ router.post("/verify-email", async (req, res) => {
 // Lets a user who never received (or lost) the verification email request
 // a fresh token.  Rate-limited informally by the generic response (no count
 // stored, but a separate rate-limit middleware can be added later).
-router.post("/resend-verification", async (req, res) => {
+router.post("/resend-verification", emailActionLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || typeof email !== "string") {
@@ -181,6 +237,7 @@ router.get("/me", requireAuth, (req, res) => {
 });
 
 router.post("/logout", requireAuth, (_req, res) => {
+  clearAuthCookies(res);
   res.json({ message: "Logged out successfully" });
 });
 
@@ -188,7 +245,7 @@ router.post("/logout", requireAuth, (_req, res) => {
 // Generates a single-use reset token (1-hour TTL) and emails a link to the
 // user.  Always returns 200 regardless of whether the email exists — this
 // prevents account enumeration.
-router.post("/forgot-password", async (req, res) => {
+router.post("/forgot-password", emailActionLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || typeof email !== "string") {

@@ -11,7 +11,7 @@
 
 import { Router } from "express";
 import { db, licensesTable, usersTable } from "@workspace/db";
-import { eq, ilike, or, and, sql } from "drizzle-orm";
+import { eq, ilike, or, and, sql, isNull, isNotNull, lt, gte, count } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
 import { PLAN_FEATURE_FLAGS, FEATURE_LABELS } from "@workspace/db/schema/feature-flags.js";
@@ -97,6 +97,37 @@ function formatLicense(lic: any, customerName?: string) {
   };
 }
 
+// ── Helpers — status filter ───────────────────────────────────────────────────
+//
+// Translates the computed status (derived from revokedAt / expiresAt) into a
+// Drizzle WHERE fragment so status filtering runs in the DB, not in JS memory.
+// Mirrors the logic in computeStatus() above.
+function buildStatusFilter(status: string) {
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  switch (status) {
+    case "revoked":
+      return isNotNull(licensesTable.revokedAt);
+    case "expired":
+      return and(
+        isNull(licensesTable.revokedAt),
+        lt(licensesTable.expiresAt, new Date()),
+      );
+    case "expiring":
+      return and(
+        isNull(licensesTable.revokedAt),
+        gte(licensesTable.expiresAt, new Date()),
+        lt(licensesTable.expiresAt, new Date(Date.now() + THIRTY_DAYS_MS)),
+      );
+    case "active":
+      return and(
+        isNull(licensesTable.revokedAt),
+        gte(licensesTable.expiresAt, new Date(Date.now() + THIRTY_DAYS_MS)),
+      );
+    default:
+      return undefined;
+  }
+}
+
 // ── GET /api/licenses ─────────────────────────────────────────────────────────
 router.get("/", requireAuth, async (req, res) => {
   try {
@@ -105,36 +136,60 @@ router.get("/", requireAuth, async (req, res) => {
       res.status(403).json({ error: "Forbidden", message: "Admin only" }); return;
     }
 
-    const page   = Math.max(1, parseInt((req.query.page as string) || "1"));
+    const page   = Math.max(1, parseInt((req.query.page   as string) || "1"));
     const limit  = Math.min(100, parseInt((req.query.limit as string) || "20"));
     const offset = (page - 1) * limit;
-    const search = (req.query.search as string) || "";
-    const status = (req.query.status as string) || "";
+    const search = ((req.query.search as string) || "").trim();
+    const status = ((req.query.status as string) || "").trim();
+    const userId = req.query.userId ? parseInt(req.query.userId as string, 10) : null;
 
-    const rows = await db
-      .select({ lic: licensesTable, customer: { id: usersTable.id, name: usersTable.name, email: usersTable.email, company: usersTable.company } })
-      .from(licensesTable)
-      .leftJoin(usersTable, eq(licensesTable.customerId, usersTable.id))
-      .orderBy(licensesTable.createdAt)
-      .limit(limit).offset(offset);
-
-    let licenses = rows.map(({ lic, customer }) =>
-      formatLicense(lic, customer?.company ?? customer?.name ?? "Unknown")
-    );
+    // ── Build WHERE conditions pushed into the DB ─────────────────────────────
+    const filters = [];
 
     if (search) {
-      const q = search.toLowerCase();
-      licenses = licenses.filter((l) =>
-        l.domain.toLowerCase().includes(q) ||
-        (l.customerName ?? "").toLowerCase().includes(q)
+      const pattern = `%${search}%`;
+      filters.push(
+        or(
+          ilike(licensesTable.domain, pattern),
+          ilike(usersTable.company,   pattern),
+          ilike(usersTable.name,      pattern),
+        )!
       );
     }
 
     if (status) {
-      licenses = licenses.filter((l) => l.status === status);
+      const statusFilter = buildStatusFilter(status);
+      if (statusFilter) filters.push(statusFilter);
     }
 
-    res.json({ licenses, total: licenses.length, page, limit });
+    if (userId && !isNaN(userId)) {
+      filters.push(eq(licensesTable.customerId, userId));
+    }
+
+    const whereClause = filters.length > 0 ? and(...filters) : undefined;
+
+    // ── Total count matching the same filters (no pagination) ─────────────────
+    const [countRow] = await db
+      .select({ total: count() })
+      .from(licensesTable)
+      .leftJoin(usersTable, eq(licensesTable.customerId, usersTable.id))
+      .where(whereClause);
+
+    // ── Paginated fetch ───────────────────────────────────────────────────────
+    const rows = await db
+      .select({ lic: licensesTable, customer: { id: usersTable.id, name: usersTable.name, email: usersTable.email, company: usersTable.company } })
+      .from(licensesTable)
+      .leftJoin(usersTable, eq(licensesTable.customerId, usersTable.id))
+      .where(whereClause)
+      .orderBy(licensesTable.createdAt)
+      .limit(limit)
+      .offset(offset);
+
+    const licenses = rows.map(({ lic, customer }) =>
+      formatLicense(lic, customer?.company ?? customer?.name ?? "Unknown")
+    );
+
+    res.json({ licenses, total: countRow.total, page, limit });
   } catch (err) {
     console.error("GET /licenses error:", err);
     res.status(500).json({ error: "Internal Server Error" });
