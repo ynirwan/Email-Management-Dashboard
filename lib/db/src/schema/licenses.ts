@@ -1,5 +1,5 @@
 // lib/db/src/schema/licenses.ts  (FULL REPLACEMENT)
-import { pgTable, text, serial, integer, boolean, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -64,7 +64,11 @@ export const licensesTable = pgTable("licenses", {
   pingCount:   integer("ping_count").notNull().default(0),
   createdAt:   timestamp("created_at").notNull().defaultNow(),
   updatedAt:   timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  // Support efficient filtering on the two most common list-query dimensions.
+  index("licenses_status_idx").on(table.status),
+  index("licenses_customer_id_idx").on(table.customerId),
+]);
 
 export const insertLicenseSchema = createInsertSchema(licensesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertLicense = z.infer<typeof insertLicenseSchema>;

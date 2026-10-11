@@ -28,13 +28,16 @@ export function verifyToken(token: string): { userId: number; email: string; rol
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
+  // Accept token from httpOnly cookie (browser sessions) or Bearer header (API clients).
+  const cookieToken = (req as any).cookies?.access_token as string | undefined;
+  const authHeader  = req.headers.authorization;
+  const token = cookieToken || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined);
+
+  if (!token) {
     res.status(401).json({ error: "Unauthorized", message: "Missing token" });
     return;
   }
 
-  const token = authHeader.slice(7);
   const payload = verifyToken(token);
   if (!payload) {
     res.status(401).json({ error: "Unauthorized", message: "Invalid token" });
