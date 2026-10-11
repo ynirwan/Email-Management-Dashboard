@@ -28,17 +28,37 @@ if (ALLOWED_ORIGINS.length === 0) {
   );
 }
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // No Origin header → non-browser request (CLI, server-to-server) → allow.
-    if (!origin) return callback(null, true);
-    // Listed origin → allow.
-    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    // Everything else → block.
-    callback(new Error(`CORS: origin '${origin}' is not allowed`));
-  },
-  credentials: true,   // required for httpOnly cookie delivery
-}));
+const allowlistedCors = cors({
+  origin: (origin, callback) => callback(null, !origin || ALLOWED_ORIGINS.includes(origin)),
+  credentials: true, // required for httpOnly cookie delivery
+});
+
+app.use((req, res, next) => {
+  const origin = req.get("origin");
+  if (!origin) return next();
+
+  // Replit terminates TLS at its proxy, so use forwarded host/protocol when
+  // present to recognize the browser's same-origin requests.
+  const forwardedHost = req.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const requestHost = (forwardedHost || req.get("host") || "").toLowerCase();
+  const forwardedProtocol = req.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const requestProtocol = (forwardedProtocol || req.protocol).replace(/:$/, "").toLowerCase();
+
+  try {
+    const parsedOrigin = new URL(origin);
+    if (
+      parsedOrigin.host.toLowerCase() === requestHost &&
+      parsedOrigin.protocol.slice(0, -1).toLowerCase() === requestProtocol
+    ) {
+      return next();
+    }
+  } catch {
+    return res.status(403).json({ message: "Origin is not allowed" });
+  }
+
+  if (ALLOWED_ORIGINS.includes(origin)) return allowlistedCors(req, res, next);
+  return res.status(403).json({ message: "Origin is not allowed" });
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
