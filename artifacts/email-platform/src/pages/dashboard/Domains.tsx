@@ -35,10 +35,17 @@ interface Domain {
   id: number;
   domain: string;
   rootDomain: string;
+  isVerified: boolean;
+  verificationRecord: {
+    type: "TXT";
+    host: string;
+    value: string;
+    expiresAt: string;
+  } | null;
   // License data — null when no license has been issued yet ("pending")
   licenseId:   number | null;
   plan:        string | null;
-  status: "active" | "expiring" | "revoked" | "expired" | "pending";
+  status: "active" | "expiring" | "revoked" | "expired" | "pending" | "verification";
   isActivated: boolean;
   isManaged:   boolean;
   expiresAt:   string | null;
@@ -86,6 +93,11 @@ function StatusChip({ status }: { status: Domain["status"] }) {
       label: "No License",
       cls: "text-muted-foreground bg-muted border-border",
     },
+    verification: {
+      icon: Clock,
+      label: "Verify Domain",
+      cls: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+    },
     awaiting: {
       icon: Clock,
       label: "Awaiting Activation",
@@ -124,14 +136,23 @@ function DomainCard({
   domain,
   onDelete,
   onDownload,
+  onVerify,
+  onRefreshChallenge,
   isDownloading,
+  isVerifying,
+  isRefreshingChallenge,
 }: {
   domain: Domain;
   onDelete: (d: Domain) => void;
   onDownload: (licenseId: number) => void;
+  onVerify: (id: number) => void;
+  onRefreshChallenge: (domain: string) => void;
   isDownloading: boolean;
+  isVerifying: boolean;
+  isRefreshingChallenge: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const [copiedRecord, setCopiedRecord] = useState(false);
   const days = domain.expiresAt ? daysUntil(domain.expiresAt) : null;
 
   const copyDomain = () => {
@@ -169,7 +190,9 @@ function DomainCard({
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <StatusChip
                   status={
-                    domain.licenseId == null
+                    !domain.isVerified
+                      ? "verification"
+                      : domain.licenseId == null
                       ? "pending"
                       : !domain.isActivated
                         ? ("awaiting" as any)
@@ -178,10 +201,10 @@ function DomainCard({
                 />
                 <span
                   className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border capitalize ${
-                    PLAN_BADGE[domain.plan] ?? PLAN_BADGE.free
+                    PLAN_BADGE[domain.plan ?? "free"] ?? PLAN_BADGE.free
                   }`}
                 >
-                  {domain.plan}
+                  {domain.plan ?? (domain.isVerified ? "No plan" : "Pending DNS")}
                 </span>
                 {domain.isManaged && (
                   <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
@@ -231,6 +254,70 @@ function DomainCard({
             </Button>
           </div>
         </div>
+
+        {!domain.isVerified && (
+          <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 space-y-2">
+                <p className="text-sm font-semibold">Prove you control this domain</p>
+                <p className="text-xs text-muted-foreground">
+                  Add this TXT record in your DNS provider. A license is issued only after ownership is verified.
+                </p>
+                {domain.verificationRecord ? (
+                  <div className="space-y-1.5 text-xs">
+                    <p>
+                      <span className="text-muted-foreground">Host: </span>
+                      <code className="break-all">{domain.verificationRecord.host}</code>
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">Value: </span>
+                      <code className="break-all">{domain.verificationRecord.value}</code>
+                    </p>
+                    <p className="text-muted-foreground">
+                      Code expires {formatDistanceToNow(parseISO(domain.verificationRecord.expiresAt), { addSuffix: true })}.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Generate a fresh DNS verification code to continue.</p>
+                )}
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {domain.verificationRecord && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `${domain.verificationRecord!.host} TXT ${domain.verificationRecord!.value}`,
+                      );
+                      setCopiedRecord(true);
+                      setTimeout(() => setCopiedRecord(false), 1500);
+                    }}
+                  >
+                    {copiedRecord ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <Copy className="mr-1.5 h-3.5 w-3.5" />}
+                    {copiedRecord ? "Copied" : "Copy record"}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  isLoading={isRefreshingChallenge}
+                  onClick={() => onRefreshChallenge(domain.domain)}
+                >
+                  Refresh code
+                </Button>
+                <Button
+                  size="sm"
+                  isLoading={isVerifying}
+                  onClick={() => onVerify(domain.id)}
+                  disabled={!domain.verificationRecord || isVerifying}
+                >
+                  Verify DNS
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats row */}
         <div className="grid grid-cols-2 gap-3 border-t border-border/50 pt-4">
@@ -329,7 +416,7 @@ function AddDomainModal({
       isOpen={isOpen}
       onClose={onClose}
       title="Add Domain"
-      description="Enter the domain where you'll install ZeniPost. This generates a domain-linked license."
+      description="Add your domain, verify ownership through DNS, then receive its license."
     >
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
         {/* Info box */}
@@ -338,8 +425,8 @@ function AddDomainModal({
           <span>
             Enter just the domain without <code>https://</code>, e.g.{" "}
             <code>mail.yourcompany.com</code> or <code>app.yourserver.io</code>.
-            After adding, download the license file to activate your
-            installation.
+            After adding, publish the verification TXT record. ZeniPost issues a
+            license after it confirms that you control the domain.
           </span>
         </div>
 
@@ -406,11 +493,11 @@ function DeleteConfirmModal({
       isOpen={!!domain}
       onClose={onClose}
       title="Delete Domain"
-      description={`Are you sure you want to delete ${domain?.domain}? This will revoke the associated license.`}
+      description={`Are you sure you want to delete ${domain?.domain}?${domain?.licenseId != null ? " This will remove its associated license." : ""}`}
     >
       <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-destructive/5 border border-destructive/20 text-destructive text-xs mb-4">
         <AlertTriangle className="w-4 h-4 shrink-0" />
-        This action cannot be undone. Your installation will stop working.
+        This action cannot be undone.{domain?.licenseId != null ? " The associated installation license will stop working." : ""}
       </div>
       <div className="flex justify-end gap-3">
         <Button variant="outline" onClick={onClose}>
@@ -455,7 +542,7 @@ export function Domains() {
       toast({
         title: "Domain added",
         description:
-          "Your domain has been registered. Download the license to activate it.",
+          "Your domain has been registered. Add the DNS TXT record to prove ownership.",
       });
       qc.invalidateQueries({ queryKey: ["/api/domains"] });
       qc.invalidateQueries({ queryKey: ["/api/portal"] });
@@ -465,6 +552,48 @@ export function Domains() {
       toast({
         title: "Error",
         description: err.message ?? "Failed to add domain",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const verifyMutation = useMutation({
+    mutationFn: (id: number) =>
+      fetchApi(`/api/domains/${id}/verify-ownership`, { method: "POST" }),
+    onSuccess: () => {
+      toast({
+        title: "Domain verified",
+        description: "Ownership confirmed. The license is now linked to your domain.",
+      });
+      qc.invalidateQueries({ queryKey: ["/api/domains"] });
+      qc.invalidateQueries({ queryKey: ["/api/portal"] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "DNS verification not complete",
+        description: err.message ?? "Check the TXT record and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const refreshChallengeMutation = useMutation({
+    mutationFn: (domain: string) =>
+      fetchApi("/api/domains", {
+        method: "POST",
+        body: JSON.stringify({ domain }),
+      }),
+    onSuccess: () => {
+      toast({
+        title: "Verification code refreshed",
+        description: "Update the TXT record with the new value.",
+      });
+      qc.invalidateQueries({ queryKey: ["/api/domains"] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Could not refresh code",
+        description: err.message ?? "Try again.",
         variant: "destructive",
       });
     },
@@ -526,8 +655,7 @@ export function Domains() {
         <div>
           <h1 className="text-3xl font-display font-bold">Domains</h1>
           <p className="text-muted-foreground mt-1">
-            Each domain corresponds to one ZeniPost installation. Add a domain,
-            then download its license to activate your app.
+            Verify that you control each domain before a license can be issued for its ZeniPost installation.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -560,13 +688,13 @@ export function Domains() {
           },
           {
             step: "2",
-            title: "Download license",
-            desc: "Get the signed .json license file for that domain",
+            title: "Verify ownership",
+            desc: "Add a TXT record so we can confirm you control the domain",
           },
           {
             step: "3",
-            title: "Place in your app",
-            desc: "Drop the license file into your ZeniPost installation and restart",
+            title: "Get your license",
+            desc: "After verification, download the signed license for your installation",
           },
         ].map(({ step, title, desc }) => (
           <div
@@ -599,8 +727,7 @@ export function Domains() {
             <Globe className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
             <h3 className="font-semibold text-base mb-1">No domains yet</h3>
             <p className="text-sm text-muted-foreground mb-5 max-w-xs mx-auto">
-              Add the domain where you'll install ZeniPost to get your first
-              license.
+              Add your installation domain and verify it with a DNS TXT record to receive a license.
             </p>
             <Button onClick={() => setShowAdd(true)} className="gap-2">
               <Plus className="w-4 h-4" />
@@ -626,7 +753,11 @@ export function Domains() {
               domain={d}
               onDelete={setDeletingDomain}
               onDownload={handleDownload}
+              onVerify={(id) => verifyMutation.mutate(id)}
+              onRefreshChallenge={(domain) => refreshChallengeMutation.mutate(domain)}
               isDownloading={downloadingId === d.licenseId}
+              isVerifying={verifyMutation.isPending && verifyMutation.variables === d.id}
+              isRefreshingChallenge={refreshChallengeMutation.isPending && refreshChallengeMutation.variables === d.domain}
             />
           ))}
         </div>

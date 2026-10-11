@@ -4,14 +4,12 @@ import { eq, desc, and, sql, isNull } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../lib/auth.js";
 import { PLAN_DEFINITIONS } from "./plans.js";
 import { buildLicensePayload } from "../lib/license-builder.js";
+import { LICENSE_SECRET } from "../lib/signing-secrets.js";
 import jwt from "jsonwebtoken";
-
-const LICENSE_SECRET = process.env["LICENSE_SECRET"] || "zenipost-license-secret-2026";
 
 const router = Router();
 
 const PLAN_PRICES   = Object.fromEntries(PLAN_DEFINITIONS.map((p) => [p.id, p.price]));
-const PLAN_LIMITS   = Object.fromEntries(PLAN_DEFINITIONS.map((p) => [p.id, { emailsLimit: p.emailsPerMonth, subscribersLimit: p.subscribersLimit }]));
 const PLAN_FEATURES = Object.fromEntries(PLAN_DEFINITIONS.map((p) => [p.id, p.featureFlags]));
 
 function parseIdParam(value: string | string[]): number {
@@ -121,11 +119,10 @@ router.post("/upgrade", requireAdmin, async (req, res) => {
     const cust = await db.select().from(usersTable).where(eq(usersTable.id, parseInt(customerId))).limit(1);
     if (!cust[0]) { res.status(404).json({ error: "Customer not found" }); return; }
 
-    const limits   = PLAN_LIMITS[plan];
     const features = PLAN_FEATURES[plan];
 
     const [upd] = await db.update(usersTable)
-      .set({ plan, emailsLimit: limits.emailsLimit, subscribersLimit: limits.subscribersLimit })
+      .set({ plan })
       .where(eq(usersTable.id, parseInt(customerId))).returning();
 
     // Update plan on all non-revoked licenses for this customer.
@@ -134,8 +131,6 @@ router.post("/upgrade", requireAdmin, async (req, res) => {
     const updatedLicenses = await db.update(licensesTable)
       .set({
         plan:             plan as any,
-        emailsPerMonth:   limits.emailsLimit,
-        subscribersLimit: limits.subscribersLimit,
         features:         JSON.stringify(features),
         updatedAt:        new Date(),
       })
@@ -167,7 +162,14 @@ router.post("/upgrade", requireAdmin, async (req, res) => {
       billingPeriodEnd: new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()),
     }).returning();
 
-    const { hashedPassword: _, ...safeUser } = upd as any;
+    const {
+      hashedPassword: _hashedPassword,
+      emailVerificationToken: _emailVerificationToken,
+      emailVerificationExpiresAt: _emailVerificationExpiresAt,
+      resetToken: _resetToken,
+      resetTokenExpiresAt: _resetTokenExpiresAt,
+      ...safeUser
+    } = upd as any;
     res.json({ message: `Upgraded to ${plan}`, user: safeUser, invoice: serialize(invoice) });
   } catch (err) {
     console.error("Upgrade error:", err);

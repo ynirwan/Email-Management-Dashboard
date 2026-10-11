@@ -66,7 +66,7 @@ export function Login() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <a href="#" className="text-sm font-semibold text-primary hover:underline">Forgot password?</a>
+                  <Link href="/forgot-password" className="text-sm font-semibold text-primary hover:underline">Forgot password?</Link>
                 </div>
                 <Input id="password" type="password" {...register("password")} />
                 {errors.password && <p className="text-xs text-destructive mt-1">{errors.password.message}</p>}
@@ -76,6 +76,12 @@ export function Login() {
                 Sign In
               </Button>
             </form>
+
+            <div className="mt-4 text-center text-sm">
+              <Link href="/resend-verification" className="font-semibold text-primary hover:underline">
+                Resend email verification
+              </Link>
+            </div>
 
             <div className="mt-8 text-center text-sm text-muted-foreground">
               Don't have an account?{" "}

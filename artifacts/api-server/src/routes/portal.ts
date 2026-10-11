@@ -11,12 +11,11 @@ import { db, licensesTable, usersTable, domainsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
-import { PLAN_DEFINITIONS } from "./plans.js";
 import { buildLicensePayload } from "../lib/license-builder.js";
+import { LICENSE_SECRET } from "../lib/signing-secrets.js";
+import { PLAN_DEFINITIONS } from "./plans.js";
 
 const router = Router();
-
-const LICENSE_SECRET = process.env["LICENSE_SECRET"] || "zenipost-license-secret-2026";
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -98,13 +97,13 @@ router.get("/", requireAuth, async (req, res) => {
       createdAt:  toISO(d.createdAt),
     }));
 
-    const PLAN_LIMITS = Object.fromEntries(
-      PLAN_DEFINITIONS.map((p: any) => [
-        p.id,
-        { emailsLimit: p.emailsPerMonth, subscribersLimit: p.subscribersLimit, price: p.price, installations: p.installations },
-      ])
-    );
-    const planInfo = PLAN_LIMITS[fullUser.plan] ?? PLAN_LIMITS.starter;
+    const planInfo = {
+      // These account-level quotas may be customized by an administrator.
+      // They are not implied by the one-time software license tier.
+      emailsLimit: fullUser.emailsLimit,
+      subscribersLimit: fullUser.subscribersLimit,
+      price: PLAN_DEFINITIONS.find((plan) => plan.id === fullUser.plan)?.price ?? 0,
+    };
 
     res.json({
       user: {

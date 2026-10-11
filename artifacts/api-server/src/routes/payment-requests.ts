@@ -18,12 +18,10 @@ import {
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../lib/auth.js";
 import { buildLicensePayload } from "../lib/license-builder.js";
-import { PLAN_DEFINITIONS } from "./plans.js";
+import { LICENSE_SECRET } from "../lib/signing-secrets.js";
 import jwt from "jsonwebtoken";
 
 const router = Router();
-
-const LICENSE_SECRET = process.env["LICENSE_SECRET"] || "zenipost-license-secret-2026";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 

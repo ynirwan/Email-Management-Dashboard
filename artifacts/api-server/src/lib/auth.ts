@@ -3,18 +3,8 @@ import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { JWT_SECRET } from "./signing-secrets.js";
 
-// Fail fast at startup — an insecure or absent secret is a critical misconfiguration.
-// Set JWT_SECRET to a random string of at least 32 characters in your .env file.
-const _rawSecret = process.env["JWT_SECRET"];
-if (!_rawSecret || _rawSecret.length < 32) {
-  throw new Error(
-    "[FATAL] JWT_SECRET env var is missing or too short (< 32 chars). " +
-    "Generate one with: node -e \"console.log(require('crypto').randomBytes(48).toString('hex'))\" " +
-    "and set it in your .env file before starting the server."
-  );
-}
-const JWT_SECRET = _rawSecret;
 const JWT_EXPIRES_IN = "7d";
 
 export function hashPassword(password: string): string {

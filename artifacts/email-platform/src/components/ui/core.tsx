@@ -86,12 +86,13 @@ export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDi
 }
 
 // --- BADGE ---
-export function Badge({ className, variant = "default", ...props }: React.HTMLAttributes<HTMLDivElement> & { variant?: "default" | "success" | "warning" | "outline" }) {
+export function Badge({ className, variant = "default", ...props }: React.HTMLAttributes<HTMLDivElement> & { variant?: "default" | "success" | "warning" | "outline" | "destructive" }) {
   const variants = {
     default: "bg-primary/10 text-primary hover:bg-primary/20",
     success: "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20",
     warning: "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20",
     outline: "border border-input text-foreground",
+    destructive: "bg-destructive/10 text-destructive hover:bg-destructive/20",
   };
   return (
     <div className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors", variants[variant], className)} {...props} />

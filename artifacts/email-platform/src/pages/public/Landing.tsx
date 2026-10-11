@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, useInView } from "framer-motion";
+import type { MotionProps, Variants } from "framer-motion";
 import { Link } from "wouter";
 import {
   ArrowRight, CheckCircle2, Zap, Server, Mail,
@@ -125,7 +126,7 @@ function HeroEnvelopes() {
 // ─────────────────────────────────────────────────────────────────────────────
 const GRADIENT_WORDS = "without deliverability headaches".split(" ");
 
-const wordV = {
+const wordV: Variants = {
   hidden: { opacity: 0, y: 8, filter: "blur(2px)" },
   visible: (i: number) => ({
     opacity: 1,
@@ -645,7 +646,7 @@ function FeatureCard({ feature }: { feature: (typeof ALL_FEATURES)[0] }) {
   );
 }
 
-const fadeUp = {
+const fadeUp: MotionProps = {
   initial: { opacity: 0, y: 22 },
   whileInView: { opacity: 1, y: 0 },
   viewport: { once: true },

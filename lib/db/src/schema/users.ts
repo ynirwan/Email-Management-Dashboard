@@ -38,6 +38,7 @@ export const usersTable = pgTable("users", {
   // Email verification — populated after registration, cleared once verified.
   emailVerifiedAt:        timestamp("email_verified_at"),
   emailVerificationToken: text("email_verification_token"),
+  emailVerificationExpiresAt: timestamp("email_verification_expires_at"),
 });
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({

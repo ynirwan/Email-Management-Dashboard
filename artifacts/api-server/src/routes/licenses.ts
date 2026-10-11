@@ -15,13 +15,11 @@ import { eq, ilike, or, and, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
 import { PLAN_FEATURE_FLAGS, FEATURE_LABELS } from "@workspace/db/schema/feature-flags.js";
-import { PLAN_DEFINITIONS } from "./plans.js";
+import { DEFAULT_LICENSE_LIMITS, PLAN_DEFINITIONS } from "./plans.js";
 import { buildLicensePayload } from "../lib/license-builder.js";
+import { ADMIN_ACCESS_SECRET, LICENSE_SECRET } from "../lib/signing-secrets.js";
 
 const router = Router();
-
-const LICENSE_SECRET      = process.env["LICENSE_SECRET"]      || "zenipost-license-secret-2026";
-const ADMIN_ACCESS_SECRET = process.env["ADMIN_ACCESS_SECRET"] || "zenipost-admin-access-secret-2026";
 // APP_URL is consumed inside lib/license-builder.ts — not needed here.
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -169,13 +167,12 @@ router.post("/", requireAdmin, async (req, res) => {
 
     // Default numeric limits to the plan definition values when caller omits them.
     // This prevents under-provisioned licenses being issued silently.
-    const planLimits = PLAN_DEFINITIONS.find((p) => p.id === plan);
     const resolvedEmailsPerMonth   = emailsPerMonth !== undefined && emailsPerMonth !== ""
       ? parseInt(emailsPerMonth)
-      : (planLimits?.emailsPerMonth   ?? 100000);
+      : DEFAULT_LICENSE_LIMITS.emailsPerMonth;
     const resolvedSubscribersLimit = subscribersLimit !== undefined && subscribersLimit !== ""
       ? parseInt(subscribersLimit)
-      : (planLimits?.subscribersLimit ?? 25000);
+      : DEFAULT_LICENSE_LIMITS.subscribersLimit;
 
     const payload = {
       customerId:       parseInt(customerId),

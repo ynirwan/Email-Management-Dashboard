@@ -8,7 +8,14 @@ import { sendMail, buildPasswordResetEmail, buildVerificationEmail } from "../li
 const router = Router();
 
 function serializeUser(user: any) {
-  const { hashedPassword, ...rest } = user;
+  const {
+    hashedPassword,
+    emailVerificationToken,
+    emailVerificationExpiresAt,
+    resetToken,
+    resetTokenExpiresAt,
+    ...rest
+  } = user;
   return rest;
 }
 
@@ -55,6 +62,7 @@ router.post("/register", async (req, res) => {
     // Generate email verification token.  Account starts inactive — the user
     // cannot log in until they verify their email address.
     const verificationToken = randomBytes(32).toString("hex");
+    const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const [user] = await db.insert(usersTable).values({
       name,
@@ -69,11 +77,17 @@ router.post("/register", async (req, res) => {
       subscribersUsed:        0,
       subscribersLimit:       0,
       emailVerificationToken: verificationToken,
+      emailVerificationExpiresAt: verificationExpiresAt,
     }).returning();
 
     // Send verification email — non-fatal if SMTP is unconfigured (logs to console).
-    const mail = buildVerificationEmail(user.name, verificationToken);
-    await sendMail({ ...mail, to: user.email });
+    try {
+      const mail = buildVerificationEmail(user.name, verificationToken);
+      await sendMail({ ...mail, to: user.email });
+    } catch {
+      // The account is already created; users can request another link.
+      console.error("Verification email delivery failed.");
+    }
 
     // Do not issue a JWT yet — the account is not active.
     res.status(201).json({
@@ -111,6 +125,21 @@ router.post("/verify-email", async (req, res) => {
       }); return;
     }
 
+    if (
+      !user.emailVerificationExpiresAt ||
+      new Date(user.emailVerificationExpiresAt).getTime() < Date.now()
+    ) {
+      await db
+        .update(usersTable)
+        .set({ emailVerificationToken: null, emailVerificationExpiresAt: null })
+        .where(eq(usersTable.id, user.id));
+      res.status(400).json({
+        error: "Bad Request",
+        message: "Verification link has expired. Request a new link and try again.",
+      });
+      return;
+    }
+
     if (user.emailVerifiedAt) {
       // Already verified — still issue a token so they land in the dashboard
       const jwt = createToken({ userId: user.id, email: user.email, role: user.role });
@@ -124,6 +153,7 @@ router.post("/verify-email", async (req, res) => {
         isActive:               true,
         emailVerifiedAt:        new Date(),
         emailVerificationToken: null,
+        emailVerificationExpiresAt: null,
       })
       .where(eq(usersTable.id, user.id))
       .returning();
@@ -163,11 +193,19 @@ router.post("/resend-verification", async (req, res) => {
 
     await db
       .update(usersTable)
-      .set({ emailVerificationToken: verificationToken })
+      .set({
+        emailVerificationToken: verificationToken,
+        emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      })
       .where(eq(usersTable.id, user.id));
 
-    const mail = buildVerificationEmail(user.name, verificationToken);
-    await sendMail({ ...mail, to: user.email });
+    try {
+      const mail = buildVerificationEmail(user.name, verificationToken);
+      await sendMail({ ...mail, to: user.email });
+    } catch {
+      // Keep the response generic so delivery failures do not reveal account state.
+      console.error("Verification email delivery failed.");
+    }
 
     res.json({ message: "If that email is registered and unverified, a new link has been sent." });
   } catch (err) {
@@ -215,8 +253,13 @@ router.post("/forgot-password", async (req, res) => {
       .set({ resetToken: token, resetTokenExpiresAt: expiry })
       .where(eq(usersTable.id, user.id));
 
-    const mail = buildPasswordResetEmail(user.name, token);
-    await sendMail({ ...mail, to: user.email });
+    try {
+      const mail = buildPasswordResetEmail(user.name, token);
+      await sendMail({ ...mail, to: user.email });
+    } catch {
+      // Keep the response generic so delivery failures do not reveal account state.
+      console.error("Password reset email delivery failed.");
+    }
 
     res.json({ message: "If that email is registered you will receive a reset link shortly." });
   } catch (err) {

@@ -8,6 +8,8 @@ export const domainsTable = pgTable("domains", {
   domain: text("domain").notNull(),
   licenseKey: text("license_key").notNull(),
   isVerified: boolean("is_verified").notNull().default(false),
+  verificationToken: text("verification_token"),
+  verificationExpiresAt: timestamp("verification_expires_at"),
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

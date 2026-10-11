@@ -11,6 +11,13 @@ import { PLAN_FEATURE_FLAGS, FEATURE_LABELS } from "@workspace/db/schema/feature
 
 const router = Router();
 
+// Local SMTP usage is not restricted by the one-time software license tier.
+// Managed-delivery email limits are defined separately in DELIVERY_PLANS.
+export const DEFAULT_LICENSE_LIMITS = {
+  emailsPerMonth: 100000,
+  subscribersLimit: 25000,
+} as const;
+
 export const PLAN_DEFINITIONS = [
   {
     id:            "starter",

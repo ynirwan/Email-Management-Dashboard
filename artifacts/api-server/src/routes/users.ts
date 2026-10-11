@@ -2,7 +2,6 @@ import { Router } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq, ilike, or, count, sql } from "drizzle-orm";
 import { requireAdmin } from "../lib/auth.js";
-import { PLAN_DEFINITIONS } from "./plans.js";
 
 const router = Router();
 
@@ -11,15 +10,15 @@ function parseIdParam(value: string | string[]): number {
   return parseInt(raw, 10);
 }
 
-const PLAN_LIMITS: Record<string, { emailsLimit: number; subscribersLimit: number }> = Object.fromEntries(
-  PLAN_DEFINITIONS.map((plan) => [
-    plan.id,
-    { emailsLimit: plan.emailsPerMonth, subscribersLimit: plan.subscribersLimit },
-  ])
-);
-
 function serializeUser(user: any) {
-  const { hashedPassword, ...rest } = user;
+  const {
+    hashedPassword,
+    emailVerificationToken,
+    emailVerificationExpiresAt,
+    resetToken,
+    resetTokenExpiresAt,
+    ...rest
+  } = user;
   return rest;
 }
 
@@ -120,9 +119,8 @@ router.patch("/:id/plan", requireAdmin, async (req, res) => {
       return;
     }
 
-    const limits = PLAN_LIMITS[plan];
     const [user] = await db.update(usersTable)
-      .set({ plan, ...limits })
+      .set({ plan })
       .where(eq(usersTable.id, id))
       .returning();
 

@@ -9,13 +9,14 @@
 
 import { Router } from "express";
 import { db, domainsTable, usersTable, licensesTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
-import { PLAN_DEFINITIONS } from "./plans.js";
+import { randomBytes } from "node:crypto";
+import { resolveTxt } from "node:dns/promises";
+import { DEFAULT_LICENSE_LIMITS } from "./plans.js";
 import { buildLicensePayload } from "../lib/license-builder.js";
 import jwt from "jsonwebtoken";
-
-const LICENSE_SECRET = process.env["LICENSE_SECRET"] || "zenipost-license-secret-2026";
+import { LICENSE_SECRET } from "../lib/signing-secrets.js";
 import { PLAN_FEATURE_FLAGS } from "@workspace/db/schema/feature-flags.js";
 
 const router = Router();
@@ -46,6 +47,28 @@ function computeRootDomain(domain: string): string {
   return labels.length >= 2 ? labels.slice(-2).join(".") : domain;
 }
 
+class DomainRequestError extends Error {
+  constructor(
+    readonly statusCode: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+async function lockDomain(tx: any, domain: string) {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${domain}, 0))`);
+}
+
+function makeVerificationRecord(domain: string, token: string, expiresAt: Date | string) {
+  return {
+    type: "TXT" as const,
+    host: `_zenipost-verification.${domain}`,
+    value: `zenipost-verification=${token}`,
+    expiresAt: expiresAt instanceof Date ? expiresAt.toISOString() : String(expiresAt),
+  };
+}
+
 // GET /api/domains — list domains for current user (admin sees all),
 // merged with license data from licensesTable keyed by domain name.
 router.get("/", requireAuth, async (req, res) => {
@@ -61,10 +84,13 @@ router.get("/", requireAuth, async (req, res) => {
     let licMap: Record<string, any> = {};
     if (domainRows.length > 0) {
       const names = domainRows.map((d) => d.domain);
+      const licenseCondition = user.role === "admin"
+        ? inArray(licensesTable.domain, names)
+        : and(inArray(licensesTable.domain, names), eq(licensesTable.customerId, user.id));
       const licRows = await db
         .select()
         .from(licensesTable)
-        .where(inArray(licensesTable.domain, names));
+        .where(licenseCondition);
       for (const l of licRows) licMap[l.domain] = l;
     }
 
@@ -75,12 +101,15 @@ router.get("/", requireAuth, async (req, res) => {
         domain:           d.domain,
         rootDomain:       lic?.rootDomain ?? "",
         isVerified:       d.isVerified,
+        verificationRecord: !d.isVerified && d.verificationToken && d.verificationExpiresAt
+          ? makeVerificationRecord(d.domain, d.verificationToken, d.verificationExpiresAt)
+          : null,
         // License data — null when no license has been issued for this domain yet
-        licenseId:        lic?.id         ?? null,
-        plan:             lic?.plan        ?? null,
+        licenseId:        d.isVerified ? lic?.id ?? null : null,
+        plan:             d.isVerified ? lic?.plan ?? null : null,
         status:           lic ? computeLicenseStatus(lic) : "pending",
-        isActivated:      lic?.isActivated ?? false,
-        isManaged:        lic?.isManaged ?? false,
+        isActivated:      d.isVerified ? lic?.isActivated ?? false : false,
+        isManaged:        d.isVerified ? lic?.isManaged ?? false : false,
         expiresAt:        lic?.expiresAt
           ? toISO(lic.expiresAt)
           : d.expiresAt
@@ -118,96 +147,188 @@ router.post("/", requireAuth, async (req, res) => {
       res.status(400).json({ error: "Bad Request", message: "Invalid domain name. Example: mail.yourcompany.com" }); return;
     }
 
-    const existing = await db
-      .select()
-      .from(domainsTable)
-      .where(and(eq(domainsTable.userId, user.id), eq(domainsTable.domain, cleanDomain)))
-      .limit(1);
-
-    if (existing[0]) {
-      res.status(400).json({ error: "Conflict", message: "Domain already registered to your account" }); return;
-    }
-
-    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
-
-    const [newDomain] = await db.insert(domainsTable).values({
-      userId:     user.id,
-      domain:     cleanDomain,
-      licenseKey: "",        // deprecated field, kept for schema compat
-      isVerified: false,
-      expiresAt,
-    }).returning();
-
-    // Auto-create a license in licensesTable so the user can download immediately.
-    // Use the plan limits from the user's current subscription tier.
-    const userRows = await db.select().from(usersTable).where(eq(usersTable.id, user.id)).limit(1);
-    const fullUser = userRows[0];
-    const userPlan = (fullUser?.plan ?? "starter") as "starter" | "pro" | "agency";
-    const planDef  = PLAN_DEFINITIONS.find((p) => p.id === userPlan)
-                  ?? PLAN_DEFINITIONS.find((p) => p.id === "starter");
-
-    const rootDomain = computeRootDomain(cleanDomain);
-
-    // Only create a license if one doesn't already exist for this domain
-    const existingLic = await db
-      .select({ id: licensesTable.id })
-      .from(licensesTable)
-      .where(eq(licensesTable.domain, cleanDomain))
-      .limit(1);
-
-    let licenseId: number | null = null;
-    if (!existingLic[0]) {
-      const [newLic] = await db.insert(licensesTable).values({
-        customerId:       user.id,
-        domain:           cleanDomain,
-        rootDomain,
-        plan:             userPlan,
-        emailsPerMonth:   planDef?.emailsPerMonth   ?? 100000,
-        subscribersLimit: planDef?.subscribersLimit ?? 25000,
-        features:         JSON.stringify(PLAN_FEATURE_FLAGS[userPlan] ?? PLAN_FEATURE_FLAGS["starter"]),
-        signature:        "",
-        expiresAt,
-        // Locked until admin confirms payment and activates via PATCH /licenses/:id/activate
-        isActivated:      false,
-      }).returning();
-      licenseId = newLic?.id ?? null;
-    } else {
-      // Existing license found (e.g. domain was re-added after deletion, or created
-      // via another flow). Bring it up to date with the user's current plan so the
-      // domain card always reflects the correct tier.
-      const updFields = {
-        customerId:       user.id,
-        plan:             userPlan,
-        emailsPerMonth:   planDef?.emailsPerMonth   ?? 100000,
-        subscribersLimit: planDef?.subscribersLimit ?? 25000,
-        features:         JSON.stringify(PLAN_FEATURE_FLAGS[userPlan] ?? PLAN_FEATURE_FLAGS["starter"]),
-        // Reset revocation so the domain is usable again after re-add
-        revokedAt:        null,
-        // Reset activation gate — admin still needs to confirm payment
-        isActivated:      false,
-        updatedAt:        new Date(),
-      };
-      const [reused] = await db.update(licensesTable)
-        .set(updFields)
-        .where(eq(licensesTable.id, existingLic[0].id))
-        .returning();
-      // Re-sign with fresh plan data
-      if (reused) {
-        try {
-          const payload   = buildLicensePayload(reused, { id: user.id, name: user.name, email: user.email, company: user.company });
-          const signature = jwt.sign(payload, LICENSE_SECRET, { algorithm: "HS256" });
-          await db.update(licensesTable)
-            .set({ signature })
-            .where(eq(licensesTable.id, reused.id));
-        } catch { /* non-fatal */ }
+    const challengeToken = randomBytes(32).toString("hex");
+    const challengeExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const result = await db.transaction(async (tx) => {
+      await lockDomain(tx, cleanDomain);
+      const claims = await tx.select().from(domainsTable).where(eq(domainsTable.domain, cleanDomain));
+      if (claims.some((claim) => claim.userId !== user.id)) {
+        throw new DomainRequestError(409, "This domain is already associated with another account.");
       }
-      licenseId = existingLic[0].id;
-    }
 
-    res.status(201).json({ domain: newDomain, licenseId });
+      const existingLicenses = await tx.select().from(licensesTable)
+        .where(eq(licensesTable.domain, cleanDomain)).limit(1);
+      const existingLicense = existingLicenses[0];
+      if (existingLicense && existingLicense.customerId !== user.id) {
+        throw new DomainRequestError(409, "This domain is already associated with another account.");
+      }
+
+      const existingClaim = claims.find((claim) => claim.userId === user.id);
+      if (existingClaim?.isVerified) {
+        return { domain: existingClaim, licenseId: existingLicense?.id ?? null };
+      }
+
+      const claim = existingClaim
+        ? (await tx.update(domainsTable)
+            .set({
+              verificationToken: challengeToken,
+              verificationExpiresAt: challengeExpiresAt,
+              isVerified: false,
+            })
+            .where(eq(domainsTable.id, existingClaim.id))
+            .returning())[0]
+        : (await tx.insert(domainsTable).values({
+            userId: user.id,
+            domain: cleanDomain,
+            licenseKey: "",
+            isVerified: false,
+            verificationToken: challengeToken,
+            verificationExpiresAt: challengeExpiresAt,
+            expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          }).returning())[0];
+
+      return { domain: claim, licenseId: null };
+    });
+
+    const isVerified = result.domain.isVerified;
+    res.status(isVerified ? 200 : 201).json({
+      domain: result.domain,
+      licenseId: result.licenseId,
+      verificationRecord: !isVerified && result.domain.verificationToken && result.domain.verificationExpiresAt
+        ? makeVerificationRecord(cleanDomain, result.domain.verificationToken, result.domain.verificationExpiresAt)
+        : null,
+    });
   } catch (err) {
+    if (err instanceof DomainRequestError) {
+      res.status(err.statusCode).json({ error: "Conflict", message: err.message });
+      return;
+    }
     console.error("Add domain error:", err);
     res.status(500).json({ error: "Internal Server Error", message: "Failed to add domain" });
+  }
+});
+
+// POST /api/domains/:id/verify-ownership — verify the customer's DNS TXT challenge.
+router.post("/:id/verify-ownership", requireAuth, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const id = parseIdParam(req.params.id);
+    const rows = await db.select().from(domainsTable).where(eq(domainsTable.id, id)).limit(1);
+    const domain = rows[0];
+
+    if (!domain) {
+      res.status(404).json({ error: "Not Found", message: "Domain not found" });
+      return;
+    }
+    if (domain.userId !== user.id) {
+      res.status(403).json({ error: "Forbidden", message: "You don't own this domain claim" });
+      return;
+    }
+    if (domain.isVerified) {
+      res.json({ message: "Domain ownership is already verified" });
+      return;
+    }
+    if (
+      !domain.verificationToken ||
+      !domain.verificationExpiresAt ||
+      new Date(domain.verificationExpiresAt).getTime() < Date.now()
+    ) {
+      res.status(410).json({ error: "Gone", message: "The verification code expired. Refresh the code and try again." });
+      return;
+    }
+
+    const expectedValue = `zenipost-verification=${domain.verificationToken}`;
+    let txtRecords: string[][];
+    try {
+      txtRecords = await resolveTxt(`_zenipost-verification.${domain.domain}`);
+    } catch {
+      res.status(400).json({ error: "Verification Pending", message: "The required DNS TXT record was not found yet." });
+      return;
+    }
+    if (!txtRecords.some((record) => record.join("") === expectedValue)) {
+      res.status(400).json({ error: "Verification Pending", message: "The required DNS TXT record was not found yet." });
+      return;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      await lockDomain(tx, domain.domain);
+      const currentRows = await tx.select().from(domainsTable).where(eq(domainsTable.id, id)).limit(1);
+      const current = currentRows[0];
+      if (!current || current.userId !== user.id) {
+        throw new DomainRequestError(404, "Domain claim not found.");
+      }
+      if (current.isVerified) {
+        const ownedLicenses = await tx.select({ id: licensesTable.id }).from(licensesTable)
+          .where(and(eq(licensesTable.domain, current.domain), eq(licensesTable.customerId, user.id))).limit(1);
+        return { licenseId: ownedLicenses[0]?.id ?? null, alreadyVerified: true };
+      }
+      if (
+        current.verificationToken !== domain.verificationToken ||
+        !current.verificationExpiresAt ||
+        new Date(current.verificationExpiresAt).getTime() < Date.now()
+      ) {
+        throw new DomainRequestError(409, "The verification code changed or expired. Refresh the code and try again.");
+      }
+
+      const claims = await tx.select().from(domainsTable).where(eq(domainsTable.domain, current.domain));
+      if (claims.some((claim) => claim.userId !== user.id)) {
+        throw new DomainRequestError(409, "This domain is already associated with another account.");
+      }
+
+      const existingLicenses = await tx.select().from(licensesTable)
+        .where(eq(licensesTable.domain, current.domain)).limit(1);
+      let license = existingLicenses[0];
+      if (license && license.customerId !== user.id) {
+        throw new DomainRequestError(409, "This domain is already associated with another account.");
+      }
+
+      if (!license) {
+        const userRows = await tx.select().from(usersTable).where(eq(usersTable.id, user.id)).limit(1);
+        const owner = userRows[0];
+        if (!owner) throw new DomainRequestError(404, "Account not found.");
+
+        const userPlan = (owner.plan ?? "starter") as "starter" | "pro" | "agency";
+        const [created] = await tx.insert(licensesTable).values({
+          customerId: user.id,
+          domain: current.domain,
+          rootDomain: computeRootDomain(current.domain),
+          plan: userPlan,
+          emailsPerMonth: DEFAULT_LICENSE_LIMITS.emailsPerMonth,
+          subscribersLimit: DEFAULT_LICENSE_LIMITS.subscribersLimit,
+          features: JSON.stringify(PLAN_FEATURE_FLAGS[userPlan] ?? PLAN_FEATURE_FLAGS.starter),
+          signature: "",
+          expiresAt: current.expiresAt ?? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          isActivated: false,
+        }).returning();
+
+        const payload = buildLicensePayload(created, owner);
+        const signature = jwt.sign(payload, LICENSE_SECRET, { algorithm: "HS256" });
+        [license] = await tx.update(licensesTable)
+          .set({ signature })
+          .where(eq(licensesTable.id, created.id))
+          .returning();
+      }
+
+      await tx.update(domainsTable).set({
+        isVerified: true,
+        verificationToken: null,
+        verificationExpiresAt: null,
+      }).where(eq(domainsTable.id, id));
+
+      return { licenseId: license.id, alreadyVerified: false };
+    });
+
+    res.json({
+      message: result.alreadyVerified ? "Domain ownership is already verified" : "Domain ownership verified.",
+      licenseId: result.licenseId,
+    });
+  } catch (err) {
+    if (err instanceof DomainRequestError) {
+      res.status(err.statusCode).json({ error: "Domain Verification Failed", message: err.message });
+      return;
+    }
+    console.error("Verify domain ownership error:", err);
+    res.status(500).json({ error: "Internal Server Error", message: "Failed to verify domain ownership" });
   }
 });
 
@@ -227,10 +348,22 @@ router.delete("/:id", requireAuth, async (req, res) => {
       res.status(403).json({ error: "Forbidden", message: "You don't own this domain" }); return;
     }
 
-    // Delete the associated license first so that re-adding the same domain
-    // always creates a fresh license with the user's current plan.
-    await db.delete(licensesTable).where(eq(licensesTable.domain, domain.domain));
-    await db.delete(domainsTable).where(eq(domainsTable.id, id));
+    await db.transaction(async (tx) => {
+      await lockDomain(tx, domain.domain);
+      const ownedLicenses = await tx.select({ id: licensesTable.id }).from(licensesTable)
+        .where(and(
+          eq(licensesTable.domain, domain.domain),
+          eq(licensesTable.customerId, domain.userId),
+        )).limit(1);
+      if (ownedLicenses[0]) {
+        await tx.delete(licensesTable)
+          .where(and(
+            eq(licensesTable.id, ownedLicenses[0].id),
+            eq(licensesTable.customerId, domain.userId),
+          ));
+      }
+      await tx.delete(domainsTable).where(eq(domainsTable.id, id));
+    });
     res.json({ message: "Domain removed successfully" });
   } catch (err) {
     res.status(500).json({ error: "Internal Server Error", message: "Failed to delete domain" });
@@ -247,7 +380,11 @@ router.patch("/:id/verify", requireAuth, async (req, res) => {
     const id = parseIdParam(req.params.id);
     const [updated] = await db
       .update(domainsTable)
-      .set({ isVerified: true })
+      .set({
+        isVerified: true,
+        verificationToken: null,
+        verificationExpiresAt: null,
+      })
       .where(eq(domainsTable.id, id))
       .returning();
     if (!updated) { res.status(404).json({ error: "Not Found" }); return; }

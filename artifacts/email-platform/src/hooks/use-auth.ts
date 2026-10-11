@@ -56,11 +56,6 @@ export function useAuth() {
       method: "POST",
       body: JSON.stringify(userData)
     }),
-    onSuccess: (data) => {
-      localStorage.setItem("token", data.token);
-      queryClient.setQueryData(["/api/auth/me"], data.user);
-      setLocation("/dashboard");
-    }
   });
 
   const logoutMutation = useMutation({

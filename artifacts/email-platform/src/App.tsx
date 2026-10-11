@@ -9,6 +9,10 @@ import { Landing }          from "@/pages/public/Landing";
 import { Login }            from "@/pages/auth/Login";
 import { Register }         from "@/pages/auth/Register";
 import { AdminLogin }       from "@/pages/auth/AdminLogin";
+import { VerifyEmail }      from "@/pages/auth/VerifyEmail";
+import { ForgotPassword }   from "@/pages/auth/ForgotPassword";
+import { ResetPassword }   from "@/pages/auth/ResetPassword";
+import { ResendVerification } from "@/pages/auth/ResendVerification";
 
 // ── User (non-admin) pages ────────────────────────────────────────────────────
 import { Overview }         from "@/pages/dashboard/Overview";       // NEW full version
@@ -99,6 +103,10 @@ function Router() {
       <Route path="/"         component={Landing} />
       <Route path="/login"    component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/verify-email" component={VerifyEmail} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/resend-verification" component={ResendVerification} />
       <Route path="/admin"    component={AdminLogin} />
 
       {/* ── Dashboard root (admin → AdminOverview, user → Overview) ── */}

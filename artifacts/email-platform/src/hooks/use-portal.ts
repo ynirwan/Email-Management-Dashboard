@@ -25,6 +25,7 @@ export interface PortalSnapshot {
     domain: string;
     plan: string;
     status: string;
+    isActivated: boolean;
     expiresAt: string;
   }>;
   domains: Array<{
